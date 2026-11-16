@@ -32,7 +32,7 @@ data class DaemonInfo(
 data class DaemonList(val daemons: List<DaemonInfo>)
 
 @Serializable
-data class Target(
+data class ScanTarget(
     val id: String,
     val cidr: String,
     val label: String = "",
@@ -40,7 +40,7 @@ data class Target(
 )
 
 @Serializable
-data class TargetList(val targets: List<Target>)
+data class TargetList(val targets: List<ScanTarget>)
 
 @Serializable
 data class AddTargetBody(val cidr: String, val label: String = "", val note: String = "")

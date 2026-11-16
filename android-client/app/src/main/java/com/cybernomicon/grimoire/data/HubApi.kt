@@ -17,7 +17,7 @@ interface HubApi {
     suspend fun targets(): TargetList
 
     @POST("api/targets")
-    suspend fun addTarget(@Body body: AddTargetBody): Map<String, Target>
+    suspend fun addTarget(@Body body: AddTargetBody): Map<String, ScanTarget>
 
     @GET("api/astral/devices")
     suspend fun devices(): DeviceList

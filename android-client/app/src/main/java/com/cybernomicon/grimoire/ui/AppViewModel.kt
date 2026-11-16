@@ -18,7 +18,7 @@ data class UiState(
     val error: String? = null,
     val spells: List<SpellSpec> = emptyList(),
     val daemons: List<DaemonInfo> = emptyList(),
-    val targets: List<Target> = emptyList(),
+    val targets: List<ScanTarget> = emptyList(),
     val devices: List<Device> = emptyList(),
     val findings: List<Finding> = emptyList(),
     val lastReport: DaemonReport? = null,
