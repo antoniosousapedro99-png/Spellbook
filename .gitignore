@@ -16,3 +16,6 @@ android-client/local.properties
 android-client/.idea/
 *.iml
 .DS_Store
+
+# Kotlin build artifacts
+android-client/.kotlin/
