@@ -21,6 +21,7 @@ data class UiState(
     val targets: List<ScanTarget> = emptyList(),
     val devices: List<Device> = emptyList(),
     val findings: List<Finding> = emptyList(),
+    val planner: PlannerStatus? = null,
     val lastReport: DaemonReport? = null,
 )
 
@@ -49,10 +50,13 @@ class AppViewModel : ViewModel() {
             val targets = a.targets().targets
             val devices = a.devices().devices
             val findings = a.findings().findings
+            // Planner status is best-effort: a slow/absent local model must
+            // not block the rest of the Grimoire from loading.
+            val planner = try { a.planner() } catch (_: Exception) { null }
             _state.update {
                 it.copy(connected = true, busy = false, spells = spells,
                     daemons = daemons, targets = targets, devices = devices,
-                    findings = findings)
+                    findings = findings, planner = planner)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, connected = false,

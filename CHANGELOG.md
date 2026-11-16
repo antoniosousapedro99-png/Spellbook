@@ -2,6 +2,37 @@
 
 All notable changes to Project Cybernomicon are recorded here.
 
+## [Unreleased] — Phase III (local agent intelligence)
+
+### Added
+- **Local LLM planner (Ollama)** behind the existing `Planner` seam. Set
+  `CYBERNOMICON_PLANNER=local` and a daemon reasons about a natural-language
+  objective and chooses which spells to cast — entirely on local hardware, no
+  cloud. Config: `CYBERNOMICON_OLLAMA_URL`, `CYBERNOMICON_OLLAMA_MODEL`,
+  `CYBERNOMICON_LLM_TIMEOUT`, `CYBERNOMICON_LLM_MAX_STEPS`.
+- `cybernomicon/llm/ollama.py`: minimal async Ollama client (JSON-mode chat +
+  availability probe; bypasses the outbound proxy since Ollama is local).
+- `GET /api/familiar/planner`: reports the active planner and, for local,
+  Ollama reachability + installed models.
+- Android **Familiar** tab shows local-AI status (`🜂 Local AI ready — <model>`).
+
+### Changed
+- The model only ever selects a **structured spell call** (never shell); every
+  call still passes through the Spell Engine (validation, permissions, target
+  authorization), so the model cannot exceed the daemon's grant.
+- Spell results fed back to the model are wrapped in the untrusted-data fence
+  (prompt-injection defence) before the model sees them.
+- **Device persistence moved from `ScryerPlanner` into the `Scryer` daemon**
+  (`on_result` hook) so it is planner-independent — the deterministic and LLM
+  planners behave identically. A planner/Ollama failure now ends a run with a
+  finding instead of crashing.
+- `httpx` promoted to a runtime dependency (used by the Ollama client).
+
+### Tests
+- +6 tests (now 35): Ollama client parsing/availability, LLM planner step
+  building, bounding, unknown-spell rejection, a mock-Ollama-driven SCRYER
+  end-to-end, and the planner-status endpoint. No real model required.
+
 ## [0.1.0] — Phase I Foundation — 2026-11-16
 
 First foundational release: a working, tested vertical slice.

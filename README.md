@@ -42,6 +42,9 @@ permission to assess.
   `archive` (Chronicle writes).
 - **SCRYER daemon**: plans and runs recon end-to-end (scry → identify →
   archive) over an authorized scope.
+- **Local AI planner** (optional): drive daemons with a natural-language
+  objective using a local Ollama model — no cloud. See
+  [LOCAL_SETUP.md](LOCAL_SETUP.md#local-ai--your-assistant-in-your-pocket).
 - **Persistence** (SQLite): targets, spells, executions, devices, findings,
   audit log.
 - **Live activity** over WebSocket.

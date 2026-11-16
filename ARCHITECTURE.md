@@ -112,6 +112,7 @@ behind the `Database` facade, so a later move to Postgres is contained.
 | GET    | `/api/targets`                     | List authorized scopes.         |
 | POST   | `/api/targets`                     | Authorize a scope.              |
 | DELETE | `/api/targets/{id}`                | Revoke a scope.                 |
+| GET    | `/api/familiar/planner`            | Active planner + local-AI state.|
 | POST   | `/api/daemons/{key}/summon`        | Run a daemon on an objective.   |
 | GET    | `/api/astral/devices`              | Discovered devices.             |
 | GET    | `/api/chronicle/findings`          | Findings history.               |
@@ -127,9 +128,13 @@ All `/api/*` and the WebSocket require the bearer token.
 - **Phase II — SCRYER** ✅ (deterministic): discovery, structured results,
   persistence, follow-up via Familiar. Android *presentation* of results needs
   the SDK to build; the API and screens are in place.
-- **Phase III — Agent intelligence**: replace `ScryerPlanner` with an
-  LLM-backed `Planner` (structured tool-calling over the spell registry),
-  task-state persistence, streamed progress, bounded adaptive execution.
+- **Phase III — Agent intelligence** 🟡 *in progress*: a **local LLM planner**
+  (`daemons/llm_planner.py`) drives any daemon via a local Ollama model, behind
+  the same `Planner` interface. The model only emits structured spell calls
+  (validated/permissioned/authorized by the engine); results are fenced as
+  untrusted before being fed back. Still to come: task-state persistence across
+  summons and streamed token-level progress. Enable with
+  `CYBERNOMICON_PLANNER=local`.
 - **Phase IV — Network intelligence**: richer `identify`, service enumeration,
   topology edges in the Astral Plane, config auditing (`inspect`/`ward`),
   reachability (`trace`), monitoring (`watch`).

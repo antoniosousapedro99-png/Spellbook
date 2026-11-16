@@ -63,6 +63,12 @@ def test_authorize_target_then_summon(client):
     assert any(x["kind"] == "discovery" for x in f)
 
 
+def test_planner_status_defaults_to_deterministic(client):
+    r = client.get("/api/familiar/planner", headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["planner"] == "deterministic"
+
+
 def test_unknown_spell_404(client):
     r = client.post("/api/spells/nope/cast", headers=AUTH, json={"params": {}})
     assert r.status_code == 404

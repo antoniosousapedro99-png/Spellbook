@@ -45,12 +45,10 @@ class ScryerPlanner:
         result = last_result["result"]
 
         if spell == "scry":
-            # Persist discovered devices, then queue IDENTIFY for each.
+            # Queue IDENTIFY for each live host, then an ARCHIVE summary.
+            # (Device persistence is handled by Scryer.on_result, not here.)
             steps: list[Step] = []
             for dev in result.get("devices", []):
-                self.db.upsert_device(
-                    dev["address"], hostname=dev.get("hostname"),
-                    status=dev["status"], open_ports=dev["open_ports"])
                 if dev["open_ports"] and dev["address"] not in self._identified:
                     self._identified.add(dev["address"])
                     steps.append(Step(
@@ -69,15 +67,6 @@ class ScryerPlanner:
                 reason="record the discovery in the Chronicle"))
             return Plan(steps=steps)
 
-        if spell == "identify":
-            # Enrich the device record with service guesses.
-            services = result.get("services", [])
-            self.db.upsert_device(
-                result["address"],
-                attributes={"services": [
-                    {"port": s["port"], "guess": s["guess"]} for s in services]})
-            return Plan(steps=[])
-
         return Plan(steps=[])
 
 
@@ -86,6 +75,26 @@ class Scryer(Daemon):
     display_name = "Scryer"
     permissions = {"network.discover", "chronicle.write"}
     max_steps = 64
+
+    def __init__(self, engine: SpellEngine, planner, db: Database):
+        super().__init__(engine, planner)
+        self.db = db
+
+    def on_result(self, step: Step, result: dict) -> None:
+        # Persist discovered devices and service enrichment, independent of
+        # whether the next step was chosen by the deterministic or LLM planner.
+        if step.spell_id == "scry":
+            for dev in result.get("devices", []):
+                self.db.upsert_device(
+                    dev["address"], hostname=dev.get("hostname"),
+                    status=dev.get("status", "up"),
+                    open_ports=dev.get("open_ports", []))
+        elif step.spell_id == "identify":
+            services = result.get("services", [])
+            self.db.upsert_device(
+                result["address"],
+                attributes={"services": [
+                    {"port": s["port"], "guess": s["guess"]} for s in services]})
 
     def interpret(self, step: Step, result: dict) -> str | None:
         if step.spell_id == "scry":
@@ -104,5 +113,6 @@ class Scryer(Daemon):
                 f"{ident} device(s) fingerprinted.")
 
 
-def build_scryer(engine: SpellEngine, db: Database) -> Scryer:
-    return Scryer(engine, ScryerPlanner(db))
+def build_scryer(engine: SpellEngine, db: Database, planner=None) -> Scryer:
+    # Default to the deterministic planner; an LLM planner may be injected.
+    return Scryer(engine, planner or ScryerPlanner(db), db)

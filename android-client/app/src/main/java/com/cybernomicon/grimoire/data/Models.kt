@@ -71,6 +71,15 @@ data class Finding(
 data class FindingList(val findings: List<Finding>)
 
 @Serializable
+data class PlannerStatus(
+    val planner: String,
+    @SerialName("ollama_url") val ollamaUrl: String? = null,
+    val model: String? = null,
+    val available: Boolean? = null,
+    val models: List<String> = emptyList(),
+)
+
+@Serializable
 data class SummonBody(val objective: String, val scope: String? = null)
 
 @Serializable

@@ -126,6 +126,18 @@ fun FamiliarScreen(vm: AppViewModel, state: UiState) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SectionTitle("Familiar")
+        state.planner?.let { p ->
+            val line = when {
+                p.planner == "local" && p.available == true ->
+                    "🜂 Local AI ready — ${p.model}"
+                p.planner == "local" ->
+                    "🜂 Local AI configured (${p.model}) but not reachable"
+                else -> "⚙ Deterministic planner (no LLM)"
+            }
+            Text(line, style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(horizontal = 16.dp))
+        }
         ElevatedCard(Modifier.fillMaxWidth().padding(16.dp)) {
             Column(Modifier.padding(16.dp)) {
                 Text("Summon: $daemonKey", style = MaterialTheme.typography.titleMedium)

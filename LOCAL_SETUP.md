@@ -122,23 +122,58 @@ Rust compile; if that's painful, use topology A/B with the hub on a computer.
 
 ---
 
-## Local AI (optional)
+## Local AI — your assistant in your pocket
 
-Today's SCRYER uses a **deterministic planner** — no LLM, nothing leaves your
-machine. When you want autonomous natural-language planning (Phase III), the
-`Planner` seam supports a local model so you still avoid the cloud:
+By default SCRYER uses a **deterministic planner** (no LLM, fully offline).
+Switch it to a **local LLM** via Ollama and the daemon will reason about your
+natural-language objective and choose which spells to cast — still entirely on
+your own hardware, nothing to the cloud. The phone's **Familiar** tab talks to
+this; the model runs on the hub machine.
 
 ```bash
-# on the hub machine
-# install Ollama from https://ollama.com, then:
-ollama pull llama3.1        # or qwen2.5, mistral, etc.
+# on the hub machine — install Ollama from https://ollama.com, then:
+ollama pull llama3.1        # or qwen2.5 / mistral-nemo — pick a tool/JSON-capable model
 ollama serve                # serves http://localhost:11434
+
+# point the hub at it and enable the local planner:
+export CYBERNOMICON_PLANNER=local
+export CYBERNOMICON_OLLAMA_URL=http://localhost:11434   # default
+export CYBERNOMICON_OLLAMA_MODEL=llama3.1               # default
+python -m cybernomicon.main
 ```
 
-The planned config will be `CYBERNOMICON_PLANNER=local` +
-`CYBERNOMICON_OLLAMA_URL=http://localhost:11434`. (The Ollama-backed planner is
-not wired yet — ask and it's a small, self-contained addition behind the
-existing interface.)
+Check it's live:
+
+```bash
+curl -s http://127.0.0.1:8787/api/familiar/planner -H "Authorization: Bearer $TOKEN"
+# {"planner":"local","model":"llama3.1","available":true,...}
+```
+
+Now summon with a free-form objective and the model plans the recon:
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/api/daemons/scryer/summon \
+     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"objective":"find and fingerprint everything on my lab","scope":"192.168.1.0/24"}'
+```
+
+In the app, the **Familiar** tab shows `🜂 Local AI ready — llama3.1` when the
+model is reachable. If Ollama is down, summon returns a clear message telling
+you to start it — it never silently falls back or makes things up.
+
+**How it stays safe:** the model only ever picks a *structured spell call* from
+the registry — never free-form shell. Every call still goes through the Spell
+Engine (schema validation, permissions, target authorization), so the model
+cannot exceed the daemon's grant or scan outside your authorized scope. Spell
+results fed back to the model are wrapped in an untrusted-data fence, so a
+hostile banner can't hijack the agent.
+
+Tuning: `CYBERNOMICON_LLM_TIMEOUT` (per-call seconds, default 120) and
+`CYBERNOMICON_LLM_MAX_STEPS` (planning-loop cap, default 12).
+
+> **Runs on the phone too (topology C):** Ollama has an Android/Termux build.
+> A small model (e.g. a 3B) is realistic on a modern phone; larger models want
+> a computer. Either way the app points at wherever the hub + Ollama run.
 
 ---
 

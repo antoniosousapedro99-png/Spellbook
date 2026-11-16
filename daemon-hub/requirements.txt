@@ -2,7 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.34
 pydantic>=2.9
 jsonschema>=4.23
-httpx>=0.27
+httpx>=0.27          # also the client for the local Ollama planner
 websockets>=13
 # dev / test
 pytest>=8.3

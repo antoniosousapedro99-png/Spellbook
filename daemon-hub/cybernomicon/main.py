@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import (Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect)
 
-from .app import DAEMON_CATALOGUE, build_hub, summon_daemon
+from .app import DAEMON_CATALOGUE, build_hub, planner_status, summon_daemon
 from .auth import TokenAuth, make_dependency
 from .config import load_or_create_api_token, load_settings
 from .models import AddTargetRequest, CastSpellRequest, SummonDaemonRequest
@@ -89,7 +89,11 @@ def create_app() -> FastAPI:
                      detail={"id": target_id})
         return {"removed": target_id}
 
-    # --- Familiar: summon a daemon with an objective ----------------------
+    # --- Familiar: planner status + summon --------------------------------
+    @app.get("/api/familiar/planner", dependencies=[require])
+    async def planner() -> dict:
+        return await planner_status(hub)
+
     @app.post("/api/daemons/{key}/summon", dependencies=[require])
     async def summon(key: str, body: SummonDaemonRequest) -> dict:
         try:

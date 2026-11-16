@@ -38,6 +38,17 @@ class Settings:
         os.environ.get("CYBERNOMICON_SPELL_TIMEOUT", "30")
     )
 
+    # --- Agent planner -------------------------------------------------
+    # "deterministic" (default, no LLM) or "local" (an Ollama model).
+    planner: str = os.environ.get("CYBERNOMICON_PLANNER", "deterministic")
+    ollama_url: str = os.environ.get(
+        "CYBERNOMICON_OLLAMA_URL", "http://localhost:11434")
+    ollama_model: str = os.environ.get("CYBERNOMICON_OLLAMA_MODEL", "llama3.1")
+    # Ceiling on a single model call; local models can be slow on first token.
+    llm_timeout: float = float(os.environ.get("CYBERNOMICON_LLM_TIMEOUT", "120"))
+    # Hard cap on planning iterations when using the LLM planner.
+    llm_max_steps: int = int(os.environ.get("CYBERNOMICON_LLM_MAX_STEPS", "12"))
+
     def with_paths(self) -> "Settings":
         data_dir = self.data_dir
         data_dir.mkdir(parents=True, exist_ok=True)

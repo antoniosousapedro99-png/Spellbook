@@ -25,6 +25,9 @@ interface HubApi {
     @GET("api/chronicle/findings")
     suspend fun findings(): FindingList
 
+    @GET("api/familiar/planner")
+    suspend fun planner(): PlannerStatus
+
     @POST("api/daemons/{key}/summon")
     suspend fun summon(@Path("key") key: String, @Body body: SummonBody): DaemonReport
 }

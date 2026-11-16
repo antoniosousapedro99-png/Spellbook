@@ -71,11 +71,18 @@ class Daemon:
     async def run(self, objective: str, context: dict | None = None
                   ) -> DaemonReport:
         context = dict(context or {})
-        plan = await self.planner.initial_plan(objective, context)
         findings: list[str] = []
         executions: list[str] = []
         steps_run = 0
         last_result: dict | None = None
+
+        try:
+            plan = await self.planner.initial_plan(objective, context)
+        except Exception as e:  # noqa: BLE001 - a planner failure is a finding
+            return DaemonReport(
+                daemon=self.key, objective=objective, steps_run=0,
+                findings=[f"planner error: {e}"], executions=[],
+                summary=f"{self.display_name} could not plan '{objective}': {e}")
 
         while plan.steps and steps_run < self.max_steps:
             step = plan.steps.pop(0)
@@ -87,6 +94,10 @@ class Daemon:
 
             if result.ok:
                 last_result = {"spell": step.spell_id, "result": result.result}
+                # Persist side effects (devices, etc.) regardless of planner —
+                # this is the daemon's job, not the planner's, so the
+                # deterministic and LLM planners behave identically.
+                self.on_result(step, result.result)
                 note = self.interpret(step, result.result)
                 if note:
                     findings.append(note)
@@ -98,10 +109,16 @@ class Daemon:
                     f"{result.error}")
 
             # Let the planner adapt after every step: it may enqueue follow-up
-            # actions (e.g. IDENTIFY per discovered host) and persist the
-            # result. The planner is responsible for not re-queuing work
-            # (see ScryerPlanner's dedupe), and max_steps bounds the loop.
-            revised = await self.planner.revise(objective, context, last_result)
+            # actions (e.g. IDENTIFY per discovered host). The planner is
+            # responsible for not re-queuing work (see ScryerPlanner's dedupe),
+            # and max_steps bounds the loop. A planner failure ends the run
+            # gracefully with a finding rather than crashing.
+            try:
+                revised = await self.planner.revise(
+                    objective, context, last_result)
+            except Exception as e:  # noqa: BLE001
+                findings.append(f"planner error during execution: {e}")
+                break
             plan.steps.extend(revised.steps)
 
         return DaemonReport(
@@ -110,6 +127,14 @@ class Daemon:
             summary=self.summarize(objective, findings))
 
     # --- hooks subclasses override ----------------------------------------
+    def on_result(self, step: Step, result: dict) -> None:
+        """Persist side effects of a successful step (e.g. discovered devices).
+
+        Runs for every planner, so persistence is independent of how the next
+        step was chosen. Default: no-op.
+        """
+        return None
+
     def interpret(self, step: Step, result: dict) -> str | None:
         """Turn a successful spell result into a human-readable finding."""
         return None
