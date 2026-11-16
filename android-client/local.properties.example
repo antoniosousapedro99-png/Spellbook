@@ -1,0 +1,3 @@
+# Copy to local.properties and point at your Android SDK.
+# local.properties is machine-specific and must not be committed.
+sdk.dir=/path/to/Android/Sdk

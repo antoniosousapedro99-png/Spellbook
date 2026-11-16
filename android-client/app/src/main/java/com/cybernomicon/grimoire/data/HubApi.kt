@@ -1,0 +1,30 @@
+package com.cybernomicon.grimoire.data
+
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+
+/** Retrofit description of the Daemon Hub REST surface. */
+interface HubApi {
+    @GET("api/grimoire/spells")
+    suspend fun spells(): SpellList
+
+    @GET("api/grimoire/daemons")
+    suspend fun daemons(): DaemonList
+
+    @GET("api/targets")
+    suspend fun targets(): TargetList
+
+    @POST("api/targets")
+    suspend fun addTarget(@Body body: AddTargetBody): Map<String, Target>
+
+    @GET("api/astral/devices")
+    suspend fun devices(): DeviceList
+
+    @GET("api/chronicle/findings")
+    suspend fun findings(): FindingList
+
+    @POST("api/daemons/{key}/summon")
+    suspend fun summon(@Path("key") key: String, @Body body: SummonBody): DaemonReport
+}
