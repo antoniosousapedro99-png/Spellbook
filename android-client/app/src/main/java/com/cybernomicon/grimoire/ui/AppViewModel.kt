@@ -24,6 +24,9 @@ data class UiState(
     val findings: List<Finding> = emptyList(),
     val planner: PlannerStatus? = null,
     val veil: VeilStatus? = null,
+    val telemetry: VeilTelemetryResponse? = null,
+    val live: List<LiveEvent> = emptyList(),
+    val liveConnected: Boolean = false,
     val lastReport: DaemonReport? = null,
     // Familiar conversation.
     val chat: List<ChatTurn> = emptyList(),
@@ -41,6 +44,7 @@ class AppViewModel : ViewModel() {
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private var api: HubApi? = null
+    private var feed: LiveFeedClient? = null
 
     fun setHubUrl(url: String) = _state.update { it.copy(hubUrl = url) }
     fun setToken(t: String) = _state.update { it.copy(token = t) }
@@ -49,7 +53,24 @@ class AppViewModel : ViewModel() {
     fun connect() = run {
         val s = _state.value
         api = HubClient.create(s.hubUrl, s.token)
+        startLiveFeed(s.hubUrl, s.token)
         refreshAll()
+    }
+
+    /** Open the live activity WebSocket; events stream into state.live. */
+    private fun startLiveFeed(url: String, token: String) {
+        feed?.close()
+        feed = LiveFeedClient(url, token,
+            onEvent = { ev ->
+                _state.update { it.copy(live = (listOf(ev) + it.live).take(80)) }
+            },
+            onState = { up -> _state.update { it.copy(liveConnected = up) } })
+        feed!!.connect()
+    }
+
+    override fun onCleared() {
+        feed?.close()
+        super.onCleared()
     }
 
     fun refreshAll() = withApi { a ->
@@ -65,11 +86,12 @@ class AppViewModel : ViewModel() {
             // not block the rest of the Grimoire from loading.
             val planner = try { a.planner() } catch (_: Exception) { null }
             val veil = try { a.veilStatus() } catch (_: Exception) { null }
+            val telemetry = try { a.veilTelemetry() } catch (_: Exception) { null }
             _state.update {
                 it.copy(connected = true, busy = false, spells = spells,
                     daemons = daemons, targets = targets, devices = devices,
                     topology = topology, findings = findings, planner = planner,
-                    veil = veil)
+                    veil = veil, telemetry = telemetry)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, connected = false,
@@ -123,11 +145,13 @@ class AppViewModel : ViewModel() {
                     // The Familiar may have changed the world; refresh views.
                     )
             }
-            // Pull any devices/findings/topology the Familiar produced.
+            // Pull any devices/findings/topology/telemetry the Familiar produced.
             _state.update { it.copy(devices = a.devices().devices,
                 findings = a.findings().findings,
                 topology = runCatching { a.topology() }.getOrNull()
-                    ?: it.topology) }
+                    ?: it.topology,
+                telemetry = runCatching { a.veilTelemetry() }.getOrNull()
+                    ?: it.telemetry) }
         } catch (e: Exception) {
             _state.update {
                 it.copy(chatBusy = false,

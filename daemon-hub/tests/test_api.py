@@ -86,6 +86,19 @@ def test_veil_status_and_intensity(client):
     assert r.status_code == 400
 
 
+def test_veil_telemetry_has_summary(client):
+    # Run an op so there's telemetry, then check the rollup shape.
+    client.post("/api/spells/archive/cast", headers=AUTH, json={"params": {
+        "kind": "summary", "title": "telemetry probe"}})
+    r = client.get("/api/veil/telemetry", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert "telemetry" in body and "summary" in body
+    s = body["summary"]
+    assert set(s) == {"count", "by_visibility", "total_noise"}
+    assert set(s["by_visibility"]) == {"low", "medium", "high"}
+
+
 def test_veil_halt_blocks_casts_until_resume(client):
     client.post("/api/targets", headers=AUTH, json={"cidr": "127.0.0.1/32"})
     client.post("/api/veil/halt", headers=AUTH)

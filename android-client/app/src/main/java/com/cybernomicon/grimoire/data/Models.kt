@@ -119,6 +119,30 @@ data class VeilStatus(
 data class IntensityBody(val level: String)
 
 @Serializable
+data class VeilTelemetryRow(
+    val id: String,
+    @SerialName("spell_id") val spellId: String,
+    val intensity: String = "",
+    @SerialName("noise_score") val noiseScore: Double = 0.0,
+    val visibility: String = "",
+    val hosts: Int = 0,
+    val ports: Int = 0,
+)
+
+@Serializable
+data class VeilTelemetrySummary(
+    val count: Int = 0,
+    @SerialName("by_visibility") val byVisibility: Map<String, Int> = emptyMap(),
+    @SerialName("total_noise") val totalNoise: Double = 0.0,
+)
+
+@Serializable
+data class VeilTelemetryResponse(
+    val telemetry: List<VeilTelemetryRow> = emptyList(),
+    val summary: VeilTelemetrySummary = VeilTelemetrySummary(),
+)
+
+@Serializable
 data class SummonBody(val objective: String, val scope: String? = null)
 
 @Serializable

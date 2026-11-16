@@ -162,7 +162,15 @@ def create_app() -> FastAPI:
 
     @app.get("/api/veil/telemetry", dependencies=[require])
     async def veil_telemetry(limit: int = 100) -> dict:
-        return {"telemetry": hub.db.list_telemetry(limit=limit)}
+        rows = hub.db.list_telemetry(limit=limit)
+        summary = {
+            "count": len(rows),
+            "by_visibility": {
+                v: sum(1 for r in rows if r["visibility"] == v)
+                for v in ("low", "medium", "high")},
+            "total_noise": round(sum(r["noise_score"] for r in rows), 2),
+        }
+        return {"telemetry": rows, "summary": summary}
 
     # --- Chronicle: findings + audit --------------------------------------
     @app.get("/api/chronicle/findings", dependencies=[require])

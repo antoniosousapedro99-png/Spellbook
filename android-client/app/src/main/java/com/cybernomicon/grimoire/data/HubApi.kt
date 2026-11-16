@@ -46,6 +46,9 @@ interface HubApi {
     @POST("api/veil/resume")
     suspend fun veilResume(): Map<String, Boolean>
 
+    @GET("api/veil/telemetry")
+    suspend fun veilTelemetry(): VeilTelemetryResponse
+
     @POST("api/daemons/{key}/summon")
     suspend fun summon(@Path("key") key: String, @Body body: SummonBody): DaemonReport
 }

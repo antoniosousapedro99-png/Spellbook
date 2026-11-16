@@ -290,18 +290,112 @@ fun RitualsScreen() {
 
 @Composable
 fun ChronicleScreen(state: UiState) {
+    val tel = state.telemetry
     Column(Modifier.fillMaxSize()) {
-        SectionTitle("Chronicle")
-        if (state.findings.isEmpty()) {
-            EmptyHint("No findings recorded yet.")
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(state.findings) { f ->
-                    InfoCard("[${f.severity}] ${f.title}",
-                        "${f.kind}${f.daemon?.let { " · $it" } ?: ""}", f.detail)
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Chronicle", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.weight(1f))
+            Text(if (state.liveConnected) "● live" else "○ offline",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (state.liveConnected) MaterialTheme.colorScheme.secondary
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        LazyColumn(Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp)) {
+
+            // --- VEIL detection telemetry -----------------------------------
+            item { SubHeader("VEIL · detection telemetry") }
+            item {
+                val s = tel?.summary
+                val byVis = s?.byVisibility ?: emptyMap()
+                ElevatedCard(Modifier.fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row {
+                            VisStat("low", byVis["low"] ?: 0, MaterialTheme.colorScheme.primary)
+                            VisStat("medium", byVis["medium"] ?: 0, MaterialTheme.colorScheme.tertiary)
+                            VisStat("high", byVis["high"] ?: 0, MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text("${s?.count ?: 0} operations · total noise " +
+                            "${s?.totalNoise ?: 0.0} · intensity " +
+                            (state.veil?.policy?.intensity ?: "—"),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Visibility estimates how noticeable each authorized " +
+                            "test is to the target's own defenses.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
+            items(tel?.telemetry ?: emptyList()) { r ->
+                val color = when (r.visibility) {
+                    "high" -> MaterialTheme.colorScheme.error
+                    "medium" -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("● ", color = color)
+                    Text(r.spellId, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f))
+                    Text("${r.visibility} · noise ${r.noiseScore}",
+                        style = MaterialTheme.typography.labelMedium, color = color)
+                }
+            }
+
+            // --- live activity feed -----------------------------------------
+            item { SubHeader("Live activity") }
+            if (state.live.isEmpty()) {
+                item {
+                    Text("Nothing yet — actions stream here as they happen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                }
+            }
+            items(state.live) { ev ->
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp)) {
+                    Text(ev.type, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary)
+                    if (ev.detail.isNotBlank())
+                        Text(ev.detail, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // --- findings ---------------------------------------------------
+            item { SubHeader("Findings") }
+            if (state.findings.isEmpty()) {
+                item {
+                    Text("No findings recorded yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                }
+            }
+            items(state.findings) { f ->
+                InfoCard("[${f.severity}] ${f.title}",
+                    "${f.kind}${f.daemon?.let { " · $it" } ?: ""}", f.detail)
+            }
         }
+    }
+}
+
+@Composable
+private fun SubHeader(text: String) =
+    Text(text, style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
+
+@Composable
+private fun RowScope.VisStat(label: String, count: Int, color: androidx.compose.ui.graphics.Color) {
+    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("$count", style = MaterialTheme.typography.headlineSmall, color = color)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

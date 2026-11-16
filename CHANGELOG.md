@@ -4,6 +4,15 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — VEIL dashboard
+- `GET /api/veil/telemetry` now returns a rollup `summary` (op count, counts by
+  visibility, total noise) alongside the rows.
+- Android: the **Chronicle** tab is now a VEIL dashboard — a detection-telemetry
+  summary (low/medium/high visibility tallies, total noise, active intensity),
+  a per-operation list, and a **live activity feed** streamed over the
+  `/ws/activity` WebSocket (first use of the WebSocket in the client), plus the
+  findings list. A live/offline indicator shows the socket state.
+
 ### Added — VEIL Core (v0.5 veil-first architecture)
 - **VEIL Core** (`cybernomicon/veil/`): a mandatory control layer the Spell
   Engine is built around, so every operation — manual, AI-driven, or ritual —
