@@ -6,11 +6,10 @@ the WebSocket require the bearer token; `/health` is open for liveness checks.
 from __future__ import annotations
 
 import asyncio
-import contextlib
+from contextlib import asynccontextmanager
 
 from fastapi import (Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect)
-from fastapi.responses import JSONResponse
 
 from .app import DAEMON_CATALOGUE, build_hub, summon_daemon
 from .auth import TokenAuth, make_dependency
@@ -25,14 +24,16 @@ def create_app() -> FastAPI:
     auth = TokenAuth(token)
     hub = build_hub(settings)
 
-    app = FastAPI(title="Cybernomicon Daemon Hub", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        hub.close()
+
+    app = FastAPI(title="Cybernomicon Daemon Hub", version="0.1.0",
+                  lifespan=lifespan)
     app.state.hub = hub
     app.state.auth = auth
     require = Depends(make_dependency(auth))
-
-    @app.on_event("shutdown")
-    def _shutdown() -> None:
-        hub.close()
 
     # --- health -----------------------------------------------------------
     @app.get("/health")

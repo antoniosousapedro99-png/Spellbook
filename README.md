@@ -50,8 +50,10 @@ permission to assess.
 - **Security foundations**: central target authorization, untrusted-data
   fencing (prompt-injection defence), append-only audit log.
 
-See [CHANGELOG.md](CHANGELOG.md) for the full Phase I delivery and
-[ARCHITECTURE.md](ARCHITECTURE.md) for the design and roadmap.
+See [CHANGELOG.md](CHANGELOG.md) for the full Phase I delivery,
+[ARCHITECTURE.md](ARCHITECTURE.md) for the design and roadmap, and
+[LOCAL_SETUP.md](LOCAL_SETUP.md) for running everything locally (computer,
+phone, or fully on-device via Termux) and where to run the Android app.
 
 ## Quick start — Daemon Hub
 
