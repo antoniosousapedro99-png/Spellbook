@@ -41,10 +41,12 @@ else
     say "         $CYBERNOMICON_OLLAMA_URL — the Familiar will report it's offline."
 fi
 
-# 3. Ensure the model is present (best effort).
+# 3. Ensure the EXACT model tag is present (not just the family — having
+#    llama3.2:3b must not make us skip pulling llama3.2:1b).
 if command -v ollama >/dev/null 2>&1; then
-    base="${CYBERNOMICON_OLLAMA_MODEL%%:*}"
-    if ! ollama list 2>/dev/null | grep -q "$base"; then
+    want="$CYBERNOMICON_OLLAMA_MODEL"
+    case "$want" in *:*) ;; *) want="$want:latest";; esac
+    if ! ollama list 2>/dev/null | awk '{print $1}' | grep -qxF "$want"; then
         say "pulling model '$CYBERNOMICON_OLLAMA_MODEL' (one-time download)..."
         ollama pull "$CYBERNOMICON_OLLAMA_MODEL" || \
             say "WARNING: could not pull $CYBERNOMICON_OLLAMA_MODEL"

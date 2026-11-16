@@ -37,8 +37,11 @@ class OllamaClient:
                 tags = r.json().get("models", [])
         except (httpx.HTTPError, ValueError):
             return False
-        names = {m.get("name", "").split(":")[0] for m in tags}
-        return self.model.split(":")[0] in names or not names
+        # Match the FULL tag (e.g. "llama3.2:1b"), not just the family name —
+        # having llama3.2:3b must not make llama3.2:1b report as available.
+        names = {m.get("name", "") for m in tags}
+        want = self.model if ":" in self.model else f"{self.model}:latest"
+        return want in names or self.model in names
 
     async def list_models(self) -> list[str]:
         try:

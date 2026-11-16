@@ -86,6 +86,19 @@ async def test_client_unavailable_when_down():
     assert await client.is_available() is False
 
 
+async def test_is_available_matches_exact_tag():
+    # The mock advertises only 'llama3.1:latest'. A model that is NOT advertised
+    # must report unavailable, even if it shares a family with something that
+    # were installed (this is the llama3.2:3b-present / llama3.2:1b-missing bug).
+    server, url = _make_server([{"done": True}])
+    try:
+        assert await OllamaClient(url, "llama3.2:1b").is_available() is False
+        assert await OllamaClient(url, "llama3.2:3b").is_available() is False
+        assert await OllamaClient(url, "llama3.1").is_available() is True
+    finally:
+        server.shutdown()
+
+
 async def test_client_parses_json_decision():
     server, url = _make_server([{"reasoning": "r", "action": None, "done": True}])
     try:
