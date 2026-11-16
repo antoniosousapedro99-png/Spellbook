@@ -50,6 +50,9 @@ permission to assess.
 - **Live activity** over WebSocket.
 - **Android client** scaffold: five sections (Grimoire, Astral Plane, Familiar,
   Rituals, Chronicle) wired to the hub API.
+- **VEIL Core**: a mandatory control layer every operation passes through —
+  operational intensity (low-noise by default), rate limiting, impact
+  telemetry, and a hard **emergency kill-switch**.
 - **Security foundations**: central target authorization, untrusted-data
   fencing (prompt-injection defence), append-only audit log.
 

@@ -76,6 +76,28 @@ def test_planner_status_defaults_to_deterministic(client):
     assert r.json()["planner"] == "deterministic"
 
 
+def test_veil_status_and_intensity(client):
+    r = client.get("/api/veil/status", headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["policy"]["intensity"] == "quiet"  # default
+    r = client.post("/api/veil/intensity", headers=AUTH, json={"level": "normal"})
+    assert r.status_code == 200 and r.json()["intensity"] == "normal"
+    r = client.post("/api/veil/intensity", headers=AUTH, json={"level": "bogus"})
+    assert r.status_code == 400
+
+
+def test_veil_halt_blocks_casts_until_resume(client):
+    client.post("/api/targets", headers=AUTH, json={"cidr": "127.0.0.1/32"})
+    client.post("/api/veil/halt", headers=AUTH)
+    r = client.post("/api/spells/archive/cast", headers=AUTH, json={"params": {
+        "kind": "summary", "title": "should be blocked"}})
+    assert r.json()["status"] == "halted"
+    client.post("/api/veil/resume", headers=AUTH)
+    r = client.post("/api/spells/archive/cast", headers=AUTH, json={"params": {
+        "kind": "summary", "title": "now allowed"}})
+    assert r.json()["status"] == "success"
+
+
 def test_unknown_spell_404(client):
     r = client.post("/api/spells/nope/cast", headers=AUTH, json={"params": {}})
     assert r.status_code == 404

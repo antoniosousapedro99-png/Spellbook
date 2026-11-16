@@ -29,3 +29,7 @@ class ArchiveRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
+
+
+class IntensityRequest(BaseModel):
+    level: str  # quiet | normal | active

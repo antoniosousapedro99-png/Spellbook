@@ -33,17 +33,41 @@ FastAPI process exposing the REST + WebSocket API. Responsibilities: auth,
 spell registry/discovery, spell execution (via the engine), daemon
 orchestration, persistence, live events, audit.
 
+### VEIL Core (`veil/`) — the mandatory control layer
+VEIL sits between the Agent Runtime and the Spell Engine and **every** operation
+passes through it, whatever invoked it (manual cast, AI daemon, or ritual). It
+owns: target-scope verification, execution-policy enforcement (operational
+intensity), resource management + rate limiting, operational-impact assessment,
+telemetry, detection assessment, audit, and **emergency termination** (a hard
+kill-switch that blocks new ops and cancels in-flight ones). It is foundational,
+not optional — the engine is constructed around it and refuses to run anything
+that doesn't clear the gate.
+
+Two guarantees are load-bearing:
+- **Complete internal observability** — VEIL never hides activity from
+  Cybernomicon's own audit/telemetry.
+- **"Detection assessment" measures, it does not evade** — the noise/visibility
+  score estimates how noticeable an authorized test is to the *target's*
+  defenders (coverage measurement). VEIL implements no monitoring evasion.
+
+Operational intensity is a dial for *our* traffic (concurrency + inter-op
+spacing): `quiet` (default, low-noise) → `normal` → `active`. Network spells
+read the active policy from their `ExecutionContext` and shape traffic to it.
+
 ### Spell Engine (`spell_engine/`)
-The execution kernel. For every call it runs a fixed pipeline:
+The execution kernel, wrapped by VEIL. For every call it runs a fixed pipeline:
 
 ```
-resolve → permit → validate(input) → record(running) → run(timeout)
+resolve → permit → validate(input) → record(running)
+        → VEIL.gate (kill-switch · rate-limit · spacing)
+        → run(timeout, cancellable) → VEIL.assess+telemetry
         → validate(output) → finalize(status, result, duration) → emit
 ```
 
 Individual spells only supply the `run` body. They cannot skip validation,
-permission checks, timeouts, or recording. This is what makes "add a spell"
-safe: the dangerous parts are not the spell author's responsibility.
+permission checks, the VEIL gate, timeouts, or recording. This is what makes
+"add a spell" safe: the dangerous parts are not the spell author's
+responsibility. A halted operation finishes with status `halted`.
 
 ### Familiar (conversational agent)
 `familiar.py` is the chat layer over the local model. Unlike a daemon (one
@@ -129,6 +153,11 @@ behind the `Database` facade, so a later move to Postgres is contained.
 | GET    | `/api/astral/topology`             | Inferred network graph.         |
 | GET    | `/api/chronicle/findings`          | Findings history.               |
 | GET    | `/api/chronicle/audit`             | Audit log.                      |
+| GET    | `/api/veil/status`                 | VEIL policy + kill-switch state.|
+| POST   | `/api/veil/intensity`              | Set operational intensity.      |
+| POST   | `/api/veil/halt`                   | Emergency termination.          |
+| POST   | `/api/veil/resume`                 | Re-arm after a halt.            |
+| GET    | `/api/veil/telemetry`              | Per-operation impact telemetry. |
 | WS     | `/ws/activity?token=…`             | Live events.                    |
 
 All `/api/*` and the WebSocket require the bearer token.

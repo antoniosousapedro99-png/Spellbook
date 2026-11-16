@@ -4,6 +4,28 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — VEIL Core (v0.5 veil-first architecture)
+- **VEIL Core** (`cybernomicon/veil/`): a mandatory control layer the Spell
+  Engine is built around, so every operation — manual, AI-driven, or ritual —
+  passes through it. Responsibilities: target-scope verification, execution
+  policy (operational intensity), rate limiting + resource caps, operational-
+  impact assessment, telemetry, detection assessment, audit, and an
+  **emergency kill-switch** (blocks new ops, cancels in-flight ones; ops finish
+  with status `halted`).
+- Operational intensity `quiet`|`normal`|`active` (default `quiet`,
+  `CYBERNOMICON_VEIL_INTENSITY`) shapes our own traffic (concurrency +
+  inter-op spacing); SCRY honours it from the ExecutionContext.
+- Per-operation **telemetry** (noise score + visibility vs the *target's*
+  defenders — a coverage measurement, never evasion) in a new `telemetry`
+  table. Daemons declare VEIL `capabilities` + `expected_telemetry`.
+- Endpoints: `GET /api/veil/status`, `POST /api/veil/intensity`,
+  `POST /api/veil/halt`, `POST /api/veil/resume`, `GET /api/veil/telemetry`.
+- Android: a VEIL control card in Grimoire (intensity chips + a prominent
+  **EMERGENCY STOP** / Resume), and VEIL state loaded on refresh.
+- Design guarantees: VEIL never conceals activity from Cybernomicon's own
+  audit; "detection assessment" measures visibility to the authorized target's
+  defenses and implements no monitoring evasion.
+
 ### Added
 - **Astral Plane topology**: `cybernomicon/topology.py` derives a network graph
   from discovered devices — grouping by subnet (/24, /64) and inferring the

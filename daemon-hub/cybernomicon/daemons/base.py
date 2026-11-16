@@ -61,6 +61,10 @@ class Daemon:
     display_name: str = "Daemon"
     #: Permissions this daemon is granted; the engine checks each spell call.
     permissions: set[str] = set()
+    #: VEIL-compatibility declarations (manifest requirement): what the daemon
+    #: can do and what telemetry it is expected to produce.
+    capabilities: tuple[str, ...] = ()
+    expected_telemetry: tuple[str, ...] = ()
     #: Hard ceiling on adaptive planning iterations.
     max_steps: int = 16
 

@@ -74,6 +74,9 @@ class Scryer(Daemon):
     key = "scryer"
     display_name = "Scryer"
     permissions = {"network.discover", "chronicle.write"}
+    capabilities = ("host-discovery", "service-fingerprinting",
+                    "network-inventory")
+    expected_telemetry = ("noise_score", "visibility", "hosts", "ports")
     max_steps = 64
 
     def __init__(self, engine: SpellEngine, planner, db: Database):

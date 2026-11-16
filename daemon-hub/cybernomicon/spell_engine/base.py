@@ -35,6 +35,9 @@ class ExecutionContext:
     authorization: Authorization
     events: EventSink
     daemon: str | None = None
+    # The active VEIL policy, so network spells can shape traffic to the
+    # configured operational intensity. Optional for standalone/test use.
+    veil_policy: object | None = None
     # Observations the spell gathered from untrusted sources, collected here so
     # callers (and the Phase III agent runtime) can fence them appropriately.
     observations: list[Untrusted] = field(default_factory=list)

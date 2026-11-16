@@ -111,6 +111,18 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conv
     ON messages (conversation_id, created_at);
+
+CREATE TABLE IF NOT EXISTS telemetry (
+    id           TEXT PRIMARY KEY,
+    execution_id TEXT,
+    spell_id     TEXT NOT NULL,
+    intensity    TEXT NOT NULL DEFAULT '',
+    noise_score  REAL NOT NULL DEFAULT 0,
+    visibility   TEXT NOT NULL DEFAULT '',   -- low|medium|high (vs TARGET defenses)
+    hosts        INTEGER NOT NULL DEFAULT 0,
+    ports        INTEGER NOT NULL DEFAULT 0,
+    created_at   REAL NOT NULL
+);
 """
 
 
@@ -367,4 +379,24 @@ class Database:
     def list_conversations(self, limit: int = 50) -> list[dict]:
         return [dict(r) for r in self._query(
             "SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?",
+            (limit,))]
+
+    # --- VEIL telemetry ---------------------------------------------------
+    def add_telemetry(self, execution_id: str | None, spell_id: str,
+                      intensity: str, noise_score: float, visibility: str,
+                      hosts: int, ports: int) -> dict:
+        row = {"id": _uid(), "execution_id": execution_id, "spell_id": spell_id,
+               "intensity": intensity, "noise_score": noise_score,
+               "visibility": visibility, "hosts": hosts, "ports": ports,
+               "created_at": _now()}
+        self._execute(
+            "INSERT INTO telemetry (id,execution_id,spell_id,intensity,"
+            "noise_score,visibility,hosts,ports,created_at) VALUES "
+            "(:id,:execution_id,:spell_id,:intensity,:noise_score,:visibility,"
+            ":hosts,:ports,:created_at)", row)
+        return row
+
+    def list_telemetry(self, limit: int = 100) -> list[dict]:
+        return [dict(r) for r in self._query(
+            "SELECT * FROM telemetry ORDER BY created_at DESC LIMIT ?",
             (limit,))]

@@ -108,12 +108,20 @@ async def scry(params: dict, ctx: ExecutionContext) -> dict:
     scope = params["scope"]
     ports = params.get("ports") or DEFAULT_PROBE_PORTS
     timeout = float(params.get("timeout", 1.0))
-    concurrency = int(params.get("concurrency", 128))
+
+    # Default concurrency + inter-host spacing come from the VEIL operational
+    # intensity (low-noise by default); explicit params still win.
+    veil = ctx.veil_policy
+    default_concurrency = getattr(veil, "max_concurrency", 128)
+    inter_delay = getattr(veil, "inter_op_delay", 0.0) or 0.0
+    concurrency = int(params.get("concurrency", default_concurrency))
 
     # Expand + authorize. Raises AuthorizationError (-> engine returns 'denied')
     # if the scope is outside every configured authorized target.
     hosts = ctx.authorization.expand(scope)
-    ctx.progress(f"scrying {len(hosts)} hosts in {scope}", total=len(hosts))
+    ctx.progress(f"scrying {len(hosts)} hosts in {scope} "
+                 f"(intensity={getattr(veil, 'intensity', 'n/a')})",
+                 total=len(hosts))
 
     sem = asyncio.Semaphore(concurrency)
     found: list[dict] = []
@@ -122,6 +130,8 @@ async def scry(params: dict, ctx: ExecutionContext) -> dict:
     async def worker(host: str) -> None:
         nonlocal done
         async with sem:
+            if inter_delay:
+                await asyncio.sleep(inter_delay)
             dev = await _scan_host(host, ports, timeout)
         done += 1
         if done % 32 == 0 or done == len(hosts):

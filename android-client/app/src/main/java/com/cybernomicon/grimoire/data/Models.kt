@@ -101,6 +101,24 @@ data class PlannerStatus(
 )
 
 @Serializable
+data class VeilPolicy(
+    val intensity: String = "",
+    @SerialName("max_concurrency") val maxConcurrency: Int = 0,
+    @SerialName("inter_op_delay") val interOpDelay: Double = 0.0,
+    @SerialName("max_ops_per_run") val maxOpsPerRun: Int = 0,
+)
+
+@Serializable
+data class VeilStatus(
+    val policy: VeilPolicy = VeilPolicy(),
+    val terminated: Boolean = false,
+    val inflight: Int = 0,
+)
+
+@Serializable
+data class IntensityBody(val level: String)
+
+@Serializable
 data class SummonBody(val objective: String, val scope: String? = null)
 
 @Serializable

@@ -26,6 +26,8 @@ import jsonschema
 
 from ..authorization import Authorization, AuthorizationError
 from ..db import Database
+from ..veil import VeilCore
+from ..veil.core import EmergencyStop
 from .base import EventSink, ExecutionContext, Spell, SpellRegistry
 
 
@@ -52,10 +54,16 @@ class ExecutionResult:
 
 class SpellEngine:
     def __init__(self, registry: SpellRegistry, db: Database,
-                 events: EventSink):
+                 events: EventSink, veil: VeilCore | None = None):
         self.registry = registry
         self.db = db
         self.events = events
+        # VEIL is mandatory: every execution passes through it. If one isn't
+        # supplied (e.g. in a unit test), build a default that still enforces
+        # scope verification, rate limiting, telemetry and the kill-switch.
+        self.veil = veil or VeilCore(
+            db, events,
+            authorization_provider=lambda: Authorization(db.authorized_targets()))
 
     def sync_registry_to_db(self) -> None:
         """Persist installed-spell metadata so the client can list them."""
@@ -98,22 +106,49 @@ class SpellEngine:
                               "error": msg})
             return ExecutionResult(exec_id, spell_id, "error", error=msg)
 
-        # --- record + run --------------------------------------------------
+        # --- record + run (through the VEIL Core) --------------------------
         exec_id = self.db.start_execution(spell_id, params, daemon)
-        auth = Authorization(self.db.authorized_targets())
+        # VEIL owns scope verification; the policy is handed to the spell so
+        # network spells can shape their own traffic to the intensity.
+        auth = self.veil.authorization()
         ctx = ExecutionContext(
             execution_id=exec_id, spell_id=spell_id, authorization=auth,
-            events=self.events, daemon=daemon)
+            events=self.events, daemon=daemon, veil_policy=self.veil.policy)
         self.db.audit("spell.start", actor=daemon or "client",
-                      detail={"spell": spell_id, "execution": exec_id})
+                      detail={"spell": spell_id, "execution": exec_id,
+                              "intensity": self.veil.policy.intensity})
         self.events.emit("spell.start",
                          {"execution_id": exec_id, "spell_id": spell_id,
                           "daemon": daemon})
 
+        # VEIL gate: kill-switch check + concurrency + inter-op spacing.
+        try:
+            await self.veil.gate()
+        except EmergencyStop as e:
+            msg = f"halted by VEIL: {e}"
+            self.db.finish_execution(exec_id, "halted", error=msg)
+            self.events.emit("spell.halted",
+                             {"execution_id": exec_id, "spell_id": spell_id})
+            return ExecutionResult(exec_id, spell_id, "halted", error=msg)
+
+        handler_task = asyncio.ensure_future(spell.handler(params, ctx))
+        self.veil.track(handler_task)
         try:
             result = await asyncio.wait_for(
-                spell.handler(params, ctx), timeout=spell.timeout_seconds)
+                handler_task, timeout=spell.timeout_seconds)
+        except asyncio.CancelledError:
+            # The kill-switch cancelled this operation in flight.
+            if self.veil.terminated:
+                msg = "halted by VEIL emergency termination"
+                self.db.finish_execution(exec_id, "halted", error=msg)
+                self.db.audit("spell.halted", actor=daemon or "client",
+                              detail={"spell": spell_id, "execution": exec_id})
+                self.events.emit("spell.halted",
+                                 {"execution_id": exec_id, "spell_id": spell_id})
+                return ExecutionResult(exec_id, spell_id, "halted", error=msg)
+            raise
         except asyncio.TimeoutError:
+            handler_task.cancel()
             msg = f"spell timed out after {spell.timeout_seconds}s"
             self.db.finish_execution(exec_id, "timeout", error=msg)
             self.events.emit("spell.timeout",
@@ -135,6 +170,13 @@ class SpellEngine:
                              {"execution_id": exec_id, "spell_id": spell_id,
                               "error": msg})
             return ExecutionResult(exec_id, spell_id, "error", error=msg)
+        finally:
+            self.veil.untrack(handler_task)
+            self.veil.release()
+
+        # --- operational-impact assessment + telemetry (VEIL) -------------
+        impact = self.veil.assess_impact(spell_id, params, result)
+        self.veil.record_telemetry(exec_id, spell_id, impact)
 
         # --- output validation --------------------------------------------
         try:

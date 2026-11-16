@@ -96,6 +96,8 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
         }
         ErrorBanner(state)
 
+        VeilControlCard(vm, state)
+
         // Authorized scopes — the security boundary. Nothing is scanned until
         // a scope is authorized here.
         var cidr by remember { mutableStateOf("") }
@@ -408,6 +410,58 @@ private fun GraphCanvas(topo: Topology, selectedId: String?,
                     style = TextStyle(fontSize = 11.sp, color = cs.onBackground))
                 drawText(layout, topLeft = Offset(
                     c.x - layout.size.width / 2f, c.y + radius + 3f))
+            }
+        }
+    }
+}
+
+// ---- VEIL control card (intensity + emergency stop) -----------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VeilControlCard(vm: AppViewModel, state: UiState) {
+    val veil = state.veil
+    val halted = veil?.terminated == true
+    ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("VEIL", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (halted) "⛔ HALTED"
+                    else "active · ${veil?.policy?.intensity ?: "—"}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (halted) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.secondary)
+            }
+            Text("Operational control: every operation passes through VEIL.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            // Intensity selector (noise level of authorized testing).
+            Row(Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("quiet", "normal", "active").forEach { level ->
+                    FilterChip(
+                        selected = veil?.policy?.intensity == level,
+                        onClick = { vm.setIntensity(level) },
+                        enabled = state.connected && !halted,
+                        label = { Text(level) })
+                }
+            }
+
+            // Emergency termination — manifest principle #10.
+            Spacer(Modifier.height(12.dp))
+            if (halted) {
+                Button(onClick = vm::resumeVeil, enabled = state.connected,
+                    modifier = Modifier.fillMaxWidth()) { Text("Resume operations") }
+            } else {
+                Button(onClick = vm::emergencyStop, enabled = state.connected,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text("⛔  EMERGENCY STOP")
+                }
             }
         }
     }

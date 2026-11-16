@@ -16,8 +16,9 @@ from .app import (DAEMON_CATALOGUE, build_hub, familiar_chat, planner_status,
 from .auth import TokenAuth, make_dependency
 from .config import load_or_create_api_token, load_settings
 from .models import (AddTargetRequest, CastSpellRequest, ChatRequest,
-                     SummonDaemonRequest)
+                     IntensityRequest, SummonDaemonRequest)
 from .topology import build_topology
+from .veil import INTENSITIES
 from .spell_engine import SpellNotFound
 
 
@@ -135,6 +136,33 @@ def create_app() -> FastAPI:
     async def topology() -> dict:
         return build_topology(hub.db.list_devices(),
                               hub.db.authorized_targets())
+
+    # --- VEIL: the mandatory control layer --------------------------------
+    @app.get("/api/veil/status", dependencies=[require])
+    async def veil_status() -> dict:
+        return hub.veil.status()
+
+    @app.post("/api/veil/intensity", dependencies=[require])
+    async def veil_intensity(body: IntensityRequest) -> dict:
+        if body.level not in INTENSITIES:
+            raise HTTPException(
+                400, f"unknown intensity: {body.level}; "
+                     f"choose one of {sorted(INTENSITIES)}")
+        return hub.veil.set_intensity(body.level).as_dict()
+
+    @app.post("/api/veil/halt", dependencies=[require])
+    async def veil_halt() -> dict:
+        hub.veil.emergency_stop(actor="operator")
+        return {"terminated": True}
+
+    @app.post("/api/veil/resume", dependencies=[require])
+    async def veil_resume() -> dict:
+        hub.veil.resume(actor="operator")
+        return {"terminated": False}
+
+    @app.get("/api/veil/telemetry", dependencies=[require])
+    async def veil_telemetry(limit: int = 100) -> dict:
+        return {"telemetry": hub.db.list_telemetry(limit=limit)}
 
     # --- Chronicle: findings + audit --------------------------------------
     @app.get("/api/chronicle/findings", dependencies=[require])

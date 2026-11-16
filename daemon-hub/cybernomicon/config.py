@@ -49,6 +49,11 @@ class Settings:
     # Hard cap on planning iterations when using the LLM planner.
     llm_max_steps: int = int(os.environ.get("CYBERNOMICON_LLM_MAX_STEPS", "12"))
 
+    # --- VEIL (mandatory control layer) --------------------------------
+    # Default operational intensity: quiet | normal | active. VEIL is always
+    # on; this only sets how much network noise is permitted by default.
+    veil_intensity: str = os.environ.get("CYBERNOMICON_VEIL_INTENSITY", "quiet")
+
     def with_paths(self) -> "Settings":
         data_dir = self.data_dir
         data_dir.mkdir(parents=True, exist_ok=True)

@@ -23,6 +23,7 @@ data class UiState(
     val topology: Topology? = null,
     val findings: List<Finding> = emptyList(),
     val planner: PlannerStatus? = null,
+    val veil: VeilStatus? = null,
     val lastReport: DaemonReport? = null,
     // Familiar conversation.
     val chat: List<ChatTurn> = emptyList(),
@@ -63,10 +64,12 @@ class AppViewModel : ViewModel() {
             // Planner status is best-effort: a slow/absent local model must
             // not block the rest of the Grimoire from loading.
             val planner = try { a.planner() } catch (_: Exception) { null }
+            val veil = try { a.veilStatus() } catch (_: Exception) { null }
             _state.update {
                 it.copy(connected = true, busy = false, spells = spells,
                     daemons = daemons, targets = targets, devices = devices,
-                    topology = topology, findings = findings, planner = planner)
+                    topology = topology, findings = findings, planner = planner,
+                    veil = veil)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, connected = false,
@@ -132,6 +135,24 @@ class AppViewModel : ViewModel() {
                         "⚠ ${e.message ?: "request failed"}"))
             }
         }
+    }
+
+    // --- VEIL controls ----------------------------------------------------
+    fun setIntensity(level: String) = withApi { a ->
+        try {
+            a.veilIntensity(IntensityBody(level))
+            _state.update { it.copy(veil = a.veilStatus()) }
+        } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+    }
+
+    fun emergencyStop() = withApi { a ->
+        try { a.veilHalt(); _state.update { it.copy(veil = a.veilStatus()) } }
+        catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+    }
+
+    fun resumeVeil() = withApi { a ->
+        try { a.veilResume(); _state.update { it.copy(veil = a.veilStatus()) } }
+        catch (e: Exception) { _state.update { it.copy(error = e.message) } }
     }
 
     private fun withApi(block: suspend (HubApi) -> Unit) {

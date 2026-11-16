@@ -17,7 +17,9 @@ DAEMON_FACTORIES = {
 DAEMON_CATALOGUE = [
     {"key": "scryer", "name": "Scryer", "role": "Reconnaissance",
      "description": "Discovers and inventories devices on authorized networks.",
-     "permissions": sorted(Scryer.permissions)},
+     "permissions": sorted(Scryer.permissions),
+     "capabilities": list(Scryer.capabilities),
+     "expected_telemetry": list(Scryer.expected_telemetry)},
 ]
 
 

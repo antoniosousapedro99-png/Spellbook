@@ -34,6 +34,18 @@ interface HubApi {
     @POST("api/familiar/chat")
     suspend fun chat(@Body body: ChatBody): ChatResponse
 
+    @GET("api/veil/status")
+    suspend fun veilStatus(): VeilStatus
+
+    @POST("api/veil/intensity")
+    suspend fun veilIntensity(@Body body: IntensityBody): VeilPolicy
+
+    @POST("api/veil/halt")
+    suspend fun veilHalt(): Map<String, Boolean>
+
+    @POST("api/veil/resume")
+    suspend fun veilResume(): Map<String, Boolean>
+
     @POST("api/daemons/{key}/summon")
     suspend fun summon(@Path("key") key: String, @Body body: SummonBody): DaemonReport
 }

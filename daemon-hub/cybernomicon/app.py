@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import spells as spell_library
+from .authorization import Authorization
 from .config import Settings
 from .db import Database
 from .daemons import DAEMON_CATALOGUE, build_daemon
@@ -17,6 +18,7 @@ from .events import EventBroadcaster
 from .familiar import Familiar
 from .llm import OllamaClient
 from .spell_engine import SpellEngine, registry
+from .veil import VeilCore, VeilPolicy
 
 
 @dataclass
@@ -25,6 +27,7 @@ class HubState:
     db: Database
     engine: SpellEngine
     events: EventBroadcaster
+    veil: VeilCore
 
     def close(self) -> None:
         self.db.close()
@@ -33,14 +36,23 @@ class HubState:
 def build_hub(settings: Settings) -> HubState:
     db = Database(settings.db_path)
     events = EventBroadcaster()
-    engine = SpellEngine(registry, db, events)
+
+    # VEIL Core is a foundational dependency: construct it first and route the
+    # engine through it so every operation is governed from the start.
+    veil = VeilCore(
+        db, events,
+        authorization_provider=lambda: Authorization(db.authorized_targets()),
+        policy=VeilPolicy.for_intensity(settings.veil_intensity))
+    engine = SpellEngine(registry, db, events, veil=veil)
 
     # Bind the ARCHIVE spell to this database, then persist registry metadata
     # so the client's Grimoire can list installed spells.
     spell_library.bind_archive(db)
     engine.sync_registry_to_db()
-    db.audit("hub.start", detail={"spells": len(registry)})
-    return HubState(settings=settings, db=db, engine=engine, events=events)
+    db.audit("hub.start", detail={"spells": len(registry),
+                                  "veil_intensity": veil.policy.intensity})
+    return HubState(settings=settings, db=db, engine=engine, events=events,
+                    veil=veil)
 
 
 def _ollama(settings: Settings) -> OllamaClient:
