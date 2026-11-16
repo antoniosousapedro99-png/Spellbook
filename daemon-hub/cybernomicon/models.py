@@ -24,3 +24,8 @@ class ArchiveRequest(BaseModel):
     title: str
     detail: str = ""
     severity: str = "info"
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None

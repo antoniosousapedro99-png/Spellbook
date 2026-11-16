@@ -5,6 +5,17 @@ All notable changes to Project Cybernomicon are recorded here.
 ## [Unreleased] — Phase III (local agent intelligence)
 
 ### Added
+- **Conversational Familiar**: a chat agent over the local model with memory
+  across turns. Each turn it either replies or calls a safe tool
+  (`summon_scryer`, `list_devices`, `list_findings`); tool results are fenced
+  as untrusted before being fed back. Conversations + messages are persisted
+  (new `conversations`/`messages` tables). Progress is emitted live to the
+  event bus (`familiar.thinking`/`thought`/`tool`/`tool_result`/`reply`).
+  Endpoints: `POST /api/familiar/chat`, `GET /api/familiar/conversations`,
+  `GET /api/familiar/conversations/{id}`.
+- Android: the **Familiar** tab is now a chat screen (bubbles, tool-call trace,
+  auto-scroll, live "working…" state), and **Grimoire** gained an authorized-
+  scope management card (the app previously had no UI to authorize targets).
 - **Local LLM planner (Ollama)** behind the existing `Planner` seam. Set
   `CYBERNOMICON_PLANNER=local` and a daemon reasons about a natural-language
   objective and chooses which spells to cast — entirely on local hardware, no

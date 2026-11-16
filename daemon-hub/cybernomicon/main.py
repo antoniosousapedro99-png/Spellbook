@@ -11,10 +11,12 @@ from contextlib import asynccontextmanager
 from fastapi import (Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect)
 
-from .app import DAEMON_CATALOGUE, build_hub, planner_status, summon_daemon
+from .app import (DAEMON_CATALOGUE, build_hub, familiar_chat, planner_status,
+                  summon_daemon)
 from .auth import TokenAuth, make_dependency
 from .config import load_or_create_api_token, load_settings
-from .models import AddTargetRequest, CastSpellRequest, SummonDaemonRequest
+from .models import (AddTargetRequest, CastSpellRequest, ChatRequest,
+                     SummonDaemonRequest)
 from .spell_engine import SpellNotFound
 
 
@@ -93,6 +95,20 @@ def create_app() -> FastAPI:
     @app.get("/api/familiar/planner", dependencies=[require])
     async def planner() -> dict:
         return await planner_status(hub)
+
+    @app.post("/api/familiar/chat", dependencies=[require])
+    async def chat(body: ChatRequest) -> dict:
+        return await familiar_chat(hub, body.conversation_id, body.message)
+
+    @app.get("/api/familiar/conversations", dependencies=[require])
+    async def conversations() -> dict:
+        return {"conversations": hub.db.list_conversations()}
+
+    @app.get("/api/familiar/conversations/{cid}", dependencies=[require])
+    async def conversation(cid: str) -> dict:
+        if not hub.db.conversation_exists(cid):
+            raise HTTPException(404, "conversation not found")
+        return {"conversation_id": cid, "messages": hub.db.list_messages(cid)}
 
     @app.post("/api/daemons/{key}/summon", dependencies=[require])
     async def summon(key: str, body: SummonDaemonRequest) -> dict:

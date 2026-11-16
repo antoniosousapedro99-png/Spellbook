@@ -14,6 +14,7 @@ from .daemons import DAEMON_CATALOGUE, build_daemon
 from .daemons.base import DaemonReport
 from .daemons.llm_planner import LLMPlanner
 from .events import EventBroadcaster
+from .familiar import Familiar
 from .llm import OllamaClient
 from .spell_engine import SpellEngine, registry
 
@@ -83,6 +84,21 @@ async def summon_daemon(hub: HubState, key: str, objective: str,
     return report
 
 
+async def familiar_chat(hub: HubState, conversation_id: str | None,
+                        message: str) -> dict:
+    """One conversational turn with the Familiar (needs a reachable Ollama)."""
+    client = _ollama(hub.settings)
+    if not await client.is_available():
+        reply = (f"Local AI (Ollama) is not reachable at "
+                 f"{hub.settings.ollama_url} with model "
+                 f"'{hub.settings.ollama_model}'. Start `ollama serve` and "
+                 f"`ollama pull {hub.settings.ollama_model}` to wake the "
+                 f"Familiar.")
+        return {"conversation_id": conversation_id, "reply": reply, "trace": []}
+    familiar = Familiar(hub.engine, hub.db, hub.events, client, hub.settings)
+    return await familiar.chat(conversation_id, message)
+
+
 async def planner_status(hub: HubState) -> dict:
     """Report the configured planner and, for local, Ollama reachability."""
     mode = hub.settings.planner
@@ -101,5 +117,5 @@ async def planner_status(hub: HubState) -> dict:
     return info
 
 
-__all__ = ["HubState", "build_hub", "summon_daemon", "planner_status",
-           "DAEMON_CATALOGUE"]
+__all__ = ["HubState", "build_hub", "summon_daemon", "familiar_chat",
+           "planner_status", "DAEMON_CATALOGUE"]

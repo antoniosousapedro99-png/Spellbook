@@ -94,6 +94,23 @@ CREATE TABLE IF NOT EXISTS audit_log (
     detail     TEXT NOT NULL DEFAULT '{}',
     created_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id         TEXT PRIMARY KEY,
+    title      TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id              TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role            TEXT NOT NULL,          -- user|assistant|tool
+    content         TEXT NOT NULL DEFAULT '',
+    created_at      REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv
+    ON messages (conversation_id, created_at);
 """
 
 
@@ -318,3 +335,36 @@ class Database:
             d["detail"] = json.loads(d["detail"])
             out.append(d)
         return out
+
+    # --- Familiar conversations -------------------------------------------
+    def create_conversation(self, title: str = "") -> str:
+        cid = _uid()
+        now = _now()
+        self._execute(
+            "INSERT INTO conversations (id,title,created_at,updated_at) "
+            "VALUES (?,?,?,?)", (cid, title, now, now))
+        return cid
+
+    def conversation_exists(self, cid: str) -> bool:
+        return bool(self._query(
+            "SELECT 1 FROM conversations WHERE id=?", (cid,)))
+
+    def add_message(self, conversation_id: str, role: str, content: str) -> dict:
+        row = {"id": _uid(), "conversation_id": conversation_id, "role": role,
+               "content": content, "created_at": _now()}
+        self._execute(
+            "INSERT INTO messages (id,conversation_id,role,content,created_at) "
+            "VALUES (:id,:conversation_id,:role,:content,:created_at)", row)
+        self._execute("UPDATE conversations SET updated_at=? WHERE id=?",
+                      (row["created_at"], conversation_id))
+        return row
+
+    def list_messages(self, conversation_id: str) -> list[dict]:
+        return [dict(r) for r in self._query(
+            "SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at",
+            (conversation_id,))]
+
+    def list_conversations(self, limit: int = 50) -> list[dict]:
+        return [dict(r) for r in self._query(
+            "SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?",
+            (limit,))]

@@ -93,3 +93,16 @@ data class DaemonReport(
 
 @Serializable
 data class CastBody(val params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap())
+
+@Serializable
+data class ChatBody(val message: String, val conversation_id: String? = null)
+
+@Serializable
+data class ChatTrace(val tool: String = "", val summary: String = "")
+
+@Serializable
+data class ChatResponse(
+    @SerialName("conversation_id") val conversationId: String,
+    val reply: String,
+    val trace: List<ChatTrace> = emptyList(),
+)

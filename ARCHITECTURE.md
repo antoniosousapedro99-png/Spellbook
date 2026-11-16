@@ -45,6 +45,14 @@ Individual spells only supply the `run` body. They cannot skip validation,
 permission checks, timeouts, or recording. This is what makes "add a spell"
 safe: the dangerous parts are not the spell author's responsibility.
 
+### Familiar (conversational agent)
+`familiar.py` is the chat layer over the local model. Unlike a daemon (one
+objective), it holds a persisted back-and-forth and, each turn, either replies
+or calls one tool from a fixed allow-list (summon a daemon, read devices, read
+findings). It reuses daemons for actual work, so the safety guarantees compose:
+the model picks structured tool calls only, daemons run spells through the
+engine, and tool results are fenced as untrusted before the model sees them.
+
 ### Agent Runtime (daemons)
 `Daemon.run(objective)` is a bounded loop: ask the planner for a plan, execute
 each step through the engine (with the daemon's permission set), interpret
@@ -113,6 +121,9 @@ behind the `Database` facade, so a later move to Postgres is contained.
 | POST   | `/api/targets`                     | Authorize a scope.              |
 | DELETE | `/api/targets/{id}`                | Revoke a scope.                 |
 | GET    | `/api/familiar/planner`            | Active planner + local-AI state.|
+| POST   | `/api/familiar/chat`               | Converse with the Familiar.     |
+| GET    | `/api/familiar/conversations`      | List chat conversations.        |
+| GET    | `/api/familiar/conversations/{id}` | One conversation's messages.    |
 | POST   | `/api/daemons/{key}/summon`        | Run a daemon on an objective.   |
 | GET    | `/api/astral/devices`              | Discovered devices.             |
 | GET    | `/api/chronicle/findings`          | Findings history.               |

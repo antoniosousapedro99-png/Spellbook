@@ -23,7 +23,15 @@ data class UiState(
     val findings: List<Finding> = emptyList(),
     val planner: PlannerStatus? = null,
     val lastReport: DaemonReport? = null,
+    // Familiar conversation.
+    val chat: List<ChatTurn> = emptyList(),
+    val conversationId: String? = null,
+    val chatBusy: Boolean = false,
 )
+
+/** A single rendered chat bubble. `trace` holds any tool calls the Familiar ran. */
+data class ChatTurn(val role: String, val text: String,
+                    val trace: List<String> = emptyList())
 
 class AppViewModel : ViewModel() {
 
@@ -86,6 +94,37 @@ class AppViewModel : ViewModel() {
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, error = e.message) }
+        }
+    }
+
+    /** Familiar: send a conversational message; the agent may call tools. */
+    fun sendChat(message: String) = withApi { a ->
+        val text = message.trim()
+        if (text.isEmpty()) return@withApi
+        _state.update {
+            it.copy(chatBusy = true, error = null,
+                chat = it.chat + ChatTurn("user", text))
+        }
+        try {
+            val resp = a.chat(ChatBody(text, _state.value.conversationId))
+            val trace = resp.trace.map { t ->
+                "⚙ ${t.tool}${if (t.summary.isNotBlank()) " — ${t.summary}" else ""}"
+            }
+            _state.update {
+                it.copy(chatBusy = false, conversationId = resp.conversationId,
+                    chat = it.chat + ChatTurn("assistant", resp.reply, trace),
+                    // The Familiar may have changed the world; refresh views.
+                    )
+            }
+            // Pull any devices/findings the Familiar produced.
+            _state.update { it.copy(devices = a.devices().devices,
+                findings = a.findings().findings) }
+        } catch (e: Exception) {
+            _state.update {
+                it.copy(chatBusy = false,
+                    chat = it.chat + ChatTurn("assistant",
+                        "⚠ ${e.message ?: "request failed"}"))
+            }
         }
     }
 
