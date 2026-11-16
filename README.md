@@ -57,6 +57,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the full Phase I delivery,
 [ARCHITECTURE.md](ARCHITECTURE.md) for the design and roadmap, and
 [LOCAL_SETUP.md](LOCAL_SETUP.md) for running everything locally (computer,
 phone, or fully on-device via Termux) and where to run the Android app.
+New to the local AI? [ONDEVICE.md](ONDEVICE.md) is a step-by-step ELI5 guide to
+setting up Ollama — including running it **entirely on your phone**.
 
 ## Quick start — Daemon Hub
 
