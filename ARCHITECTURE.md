@@ -126,6 +126,7 @@ behind the `Database` facade, so a later move to Postgres is contained.
 | GET    | `/api/familiar/conversations/{id}` | One conversation's messages.    |
 | POST   | `/api/daemons/{key}/summon`        | Run a daemon on an objective.   |
 | GET    | `/api/astral/devices`              | Discovered devices.             |
+| GET    | `/api/astral/topology`             | Inferred network graph.         |
 | GET    | `/api/chronicle/findings`          | Findings history.               |
 | GET    | `/api/chronicle/audit`             | Audit log.                      |
 | WS     | `/ws/activity?token=…`             | Live events.                    |

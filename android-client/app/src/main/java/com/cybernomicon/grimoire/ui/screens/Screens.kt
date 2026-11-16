@@ -1,5 +1,7 @@
 package com.cybernomicon.grimoire.ui.screens
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,12 +15,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.cybernomicon.grimoire.data.*
 import com.cybernomicon.grimoire.ui.AppViewModel
 import com.cybernomicon.grimoire.ui.ChatTurn
 import com.cybernomicon.grimoire.ui.UiState
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 // ---- shared bits ----------------------------------------------------------
 
@@ -130,23 +144,31 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
     }
 }
 
-// ---- ASTRAL PLANE: discovered devices -------------------------------------
+// ---- ASTRAL PLANE: interactive network topology ---------------------------
 
 @Composable
 fun AstralPlaneScreen(state: UiState) {
+    val topo = state.topology
+    var selected by remember(topo) { mutableStateOf<TopoNode?>(null) }
+
     Column(Modifier.fillMaxSize()) {
         SectionTitle("Astral Plane")
-        if (state.devices.isEmpty()) {
-            EmptyHint("No devices scried yet. Summon Scryer from the Familiar.")
+        if (topo == null || topo.nodes.isEmpty()) {
+            EmptyHint("The plane is dark. Summon Scryer from the Familiar to " +
+                "discover devices, and they will appear here as a map.")
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(state.devices) { d ->
-                    InfoCard(
-                        d.hostname ?: d.address,
-                        "${d.address} · ${d.status}",
-                        "open ports: ${d.openPorts.joinToString().ifBlank { "—" }}")
-                }
+            // Detail of the tapped node.
+            selected?.let { n ->
+                InfoCard(
+                    n.label,
+                    "${n.kind}${n.address?.let { " · $it" } ?: ""} · ${n.status}",
+                    buildString {
+                        if (n.role.isNotBlank()) append("services: ${n.role}\n")
+                        if (n.openPorts.isNotEmpty())
+                            append("open ports: ${n.openPorts.joinToString()}")
+                    }.ifBlank { "tap nodes to inspect" })
             }
+            GraphCanvas(topo, selected?.id) { selected = it }
         }
     }
 }
@@ -286,5 +308,107 @@ private fun EmptyHint(text: String) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Text(text, style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ---- Astral Plane graph rendering -----------------------------------------
+
+private class GraphLayout(val pos: Map<String, Offset>, val height: Float)
+
+/** Deterministic radial layout: each connected component is rooted at its
+ *  subnet node (or first node), with nodes placed on concentric rings by BFS
+ *  depth. Components are stacked vertically. */
+private fun layoutGraph(topo: Topology, widthPx: Float): GraphLayout {
+    val adj = HashMap<String, MutableList<String>>()
+    topo.nodes.forEach { adj[it.id] = mutableListOf() }
+    topo.edges.forEach { adj[it.source]?.add(it.target); adj[it.target]?.add(it.source) }
+
+    val pos = HashMap<String, Offset>()
+    val visited = HashSet<String>()
+    val ring = 150f
+    val cx = (widthPx / 2f).coerceAtLeast(160f)
+    var y = 120f
+
+    val rootOrder = topo.nodes.filter { it.kind == "subnet" }.map { it.id } +
+        topo.nodes.map { it.id }
+    for (root in rootOrder) {
+        if (root in visited || adj[root] == null) continue
+        val depth = HashMap<String, Int>()
+        val q = ArrayDeque<String>()
+        depth[root] = 0; q.add(root); visited.add(root)
+        val comp = mutableListOf(root)
+        while (q.isNotEmpty()) {
+            val n = q.removeFirst()
+            for (m in adj[n]!!) if (m !in visited) {
+                visited.add(m); depth[m] = depth[n]!! + 1; q.add(m); comp.add(m)
+            }
+        }
+        val byDepth = comp.groupBy { depth[it]!! }
+        val maxD = byDepth.keys.maxOrNull() ?: 0
+        val centerY = y + maxD * ring
+        byDepth.forEach { (d, ids) ->
+            if (d == 0) {
+                pos[ids[0]] = Offset(cx, centerY)
+            } else {
+                val r = d * ring
+                ids.forEachIndexed { i, id ->
+                    val ang = (2.0 * PI * i / ids.size) - PI / 2
+                    val x = (cx + (r * cos(ang)).toFloat())
+                        .coerceIn(36f, widthPx - 36f)
+                    pos[id] = Offset(x, centerY + (r * sin(ang)).toFloat())
+                }
+            }
+        }
+        y = centerY + maxD * ring + 130f
+    }
+    return GraphLayout(pos, y + 40f)
+}
+
+@Composable
+private fun GraphCanvas(topo: Topology, selectedId: String?,
+                        onSelect: (TopoNode) -> Unit) {
+    val measurer = rememberTextMeasurer()
+    val cs = MaterialTheme.colorScheme
+    val scroll = rememberScrollState()
+    BoxWithConstraints(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val laid = remember(topo, widthPx) { layoutGraph(topo, widthPx) }
+        val heightDp = with(density) { laid.height.coerceAtLeast(1f).toDp() }
+        val nodeById = remember(topo) { topo.nodes.associateBy { it.id } }
+
+        Canvas(Modifier.fillMaxWidth().height(heightDp)
+            .pointerInput(laid) {
+                detectTapGestures { p ->
+                    val hit = laid.pos.minByOrNull { (p - it.value).getDistanceSquared() }
+                    if (hit != null && (p - hit.value).getDistance() < 64f)
+                        nodeById[hit.key]?.let(onSelect)
+                }
+            }) {
+            topo.edges.forEach { e ->
+                val a = laid.pos[e.source]; val b = laid.pos[e.target]
+                if (a != null && b != null)
+                    drawLine(cs.outline.copy(alpha = 0.5f), a, b, strokeWidth = 2.5f)
+            }
+            topo.nodes.forEach { n ->
+                val c = laid.pos[n.id] ?: return@forEach
+                val fill = when (n.kind) {
+                    "subnet" -> cs.secondary
+                    "gateway" -> cs.tertiary
+                    else -> if (n.status == "up") cs.primary else cs.surfaceVariant
+                }
+                val radius = when (n.kind) {
+                    "subnet" -> 30f; "gateway" -> 24f; else -> 20f
+                }
+                if (n.id == selectedId)
+                    drawCircle(cs.onSurface, radius + 6f, c, style = Stroke(width = 3f))
+                drawCircle(fill, radius, c)
+                val layout = measurer.measure(
+                    AnnotatedString(n.label.take(18)),
+                    style = TextStyle(fontSize = 11.sp, color = cs.onBackground))
+                drawText(layout, topLeft = Offset(
+                    c.x - layout.size.width / 2f, c.y + radius + 3f))
+            }
+        }
     }
 }

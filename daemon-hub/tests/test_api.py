@@ -63,6 +63,13 @@ def test_authorize_target_then_summon(client):
     assert any(x["kind"] == "discovery" for x in f)
 
 
+def test_astral_topology_endpoint(client):
+    r = client.get("/api/astral/topology", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"nodes", "edges", "subnets"}
+
+
 def test_planner_status_defaults_to_deterministic(client):
     r = client.get("/api/familiar/planner", headers=AUTH)
     assert r.status_code == 200

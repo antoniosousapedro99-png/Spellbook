@@ -5,6 +5,13 @@ All notable changes to Project Cybernomicon are recorded here.
 ## [Unreleased] — Phase III (local agent intelligence)
 
 ### Added
+- **Astral Plane topology**: `cybernomicon/topology.py` derives a network graph
+  from discovered devices — grouping by subnet (/24, /64) and inferring the
+  likely gateway (host at network+1), with device service roles. Exposed at
+  `GET /api/astral/topology`. The Android Astral Plane tab now renders this as
+  an interactive node-graph (deterministic radial layout, tap-to-inspect,
+  scrollable) instead of a flat list. Relationships are clearly *inferred*, not
+  measured — a future TRACE spell can replace inference with real hop data.
 - **Conversational Familiar**: a chat agent over the local model with memory
   across turns. Each turn it either replies or calls a safe tool
   (`summon_scryer`, `list_devices`, `list_findings`); tool results are fenced

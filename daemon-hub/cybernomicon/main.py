@@ -17,6 +17,7 @@ from .auth import TokenAuth, make_dependency
 from .config import load_or_create_api_token, load_settings
 from .models import (AddTargetRequest, CastSpellRequest, ChatRequest,
                      SummonDaemonRequest)
+from .topology import build_topology
 from .spell_engine import SpellNotFound
 
 
@@ -129,6 +130,11 @@ def create_app() -> FastAPI:
     @app.get("/api/astral/devices", dependencies=[require])
     async def devices() -> dict:
         return {"devices": hub.db.list_devices()}
+
+    @app.get("/api/astral/topology", dependencies=[require])
+    async def topology() -> dict:
+        return build_topology(hub.db.list_devices(),
+                              hub.db.authorized_targets())
 
     # --- Chronicle: findings + audit --------------------------------------
     @app.get("/api/chronicle/findings", dependencies=[require])

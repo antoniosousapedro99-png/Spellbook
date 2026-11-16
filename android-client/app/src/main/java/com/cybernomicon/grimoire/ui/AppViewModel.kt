@@ -20,6 +20,7 @@ data class UiState(
     val daemons: List<DaemonInfo> = emptyList(),
     val targets: List<ScanTarget> = emptyList(),
     val devices: List<Device> = emptyList(),
+    val topology: Topology? = null,
     val findings: List<Finding> = emptyList(),
     val planner: PlannerStatus? = null,
     val lastReport: DaemonReport? = null,
@@ -57,6 +58,7 @@ class AppViewModel : ViewModel() {
             val daemons = a.daemons().daemons
             val targets = a.targets().targets
             val devices = a.devices().devices
+            val topology = try { a.topology() } catch (_: Exception) { null }
             val findings = a.findings().findings
             // Planner status is best-effort: a slow/absent local model must
             // not block the rest of the Grimoire from loading.
@@ -64,7 +66,7 @@ class AppViewModel : ViewModel() {
             _state.update {
                 it.copy(connected = true, busy = false, spells = spells,
                     daemons = daemons, targets = targets, devices = devices,
-                    findings = findings, planner = planner)
+                    topology = topology, findings = findings, planner = planner)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, connected = false,
@@ -90,6 +92,8 @@ class AppViewModel : ViewModel() {
             _state.update {
                 it.copy(busy = false, lastReport = report,
                     devices = a.devices().devices,
+                    topology = runCatching { a.topology() }.getOrNull()
+                        ?: it.topology,
                     findings = a.findings().findings)
             }
         } catch (e: Exception) {
@@ -116,9 +120,11 @@ class AppViewModel : ViewModel() {
                     // The Familiar may have changed the world; refresh views.
                     )
             }
-            // Pull any devices/findings the Familiar produced.
+            // Pull any devices/findings/topology the Familiar produced.
             _state.update { it.copy(devices = a.devices().devices,
-                findings = a.findings().findings) }
+                findings = a.findings().findings,
+                topology = runCatching { a.topology() }.getOrNull()
+                    ?: it.topology) }
         } catch (e: Exception) {
             _state.update {
                 it.copy(chatBusy = false,

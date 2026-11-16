@@ -22,6 +22,9 @@ interface HubApi {
     @GET("api/astral/devices")
     suspend fun devices(): DeviceList
 
+    @GET("api/astral/topology")
+    suspend fun topology(): Topology
+
     @GET("api/chronicle/findings")
     suspend fun findings(): FindingList
 

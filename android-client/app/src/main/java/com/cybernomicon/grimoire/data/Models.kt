@@ -58,6 +58,27 @@ data class Device(
 data class DeviceList(val devices: List<Device>)
 
 @Serializable
+data class TopoNode(
+    val id: String,
+    val label: String,
+    val kind: String,                       // subnet | gateway | device
+    val address: String? = null,
+    val status: String = "",
+    @SerialName("open_ports") val openPorts: List<Int> = emptyList(),
+    val role: String = "",
+)
+
+@Serializable
+data class TopoEdge(val source: String, val target: String)
+
+@Serializable
+data class Topology(
+    val nodes: List<TopoNode> = emptyList(),
+    val edges: List<TopoEdge> = emptyList(),
+    val subnets: List<String> = emptyList(),
+)
+
+@Serializable
 data class Finding(
     val id: String,
     val kind: String,
