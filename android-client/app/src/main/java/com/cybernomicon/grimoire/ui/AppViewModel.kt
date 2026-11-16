@@ -24,6 +24,7 @@ data class UiState(
     val findings: List<Finding> = emptyList(),
     val planner: PlannerStatus? = null,
     val veil: VeilStatus? = null,
+    val lastCast: String? = null,
     val telemetry: VeilTelemetryResponse? = null,
     val live: List<LiveEvent> = emptyList(),
     val liveConnected: Boolean = false,
@@ -160,6 +161,29 @@ class AppViewModel : ViewModel() {
             }
         }
     }
+
+    /** Cast a spell directly (bypassing the Familiar). */
+    fun castSpell(spellId: String,
+                  params: Map<String, kotlinx.serialization.json.JsonElement>) =
+        withApi { a ->
+            _state.update { it.copy(busy = true, error = null, lastCast = null) }
+            try {
+                val r = a.cast(spellId, CastBody(params))
+                val msg = "⚡ $spellId → ${r.status}" +
+                    (r.error?.let { e -> ": $e" } ?: "")
+                _state.update {
+                    it.copy(busy = false, lastCast = msg,
+                        devices = a.devices().devices,
+                        findings = a.findings().findings,
+                        topology = runCatching { a.topology() }.getOrNull()
+                            ?: it.topology,
+                        telemetry = runCatching { a.veilTelemetry() }.getOrNull()
+                            ?: it.telemetry)
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = e.message) }
+            }
+        }
 
     // --- VEIL controls ----------------------------------------------------
     fun setIntensity(level: String) = withApi { a ->

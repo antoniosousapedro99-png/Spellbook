@@ -13,6 +13,9 @@ interface HubApi {
     @GET("api/grimoire/daemons")
     suspend fun daemons(): DaemonList
 
+    @POST("api/spells/{id}/cast")
+    suspend fun cast(@Path("id") id: String, @Body body: CastBody): CastResult
+
     @GET("api/targets")
     suspend fun targets(): TargetList
 

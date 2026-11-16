@@ -14,6 +14,17 @@ data class SpellSpec(
     val description: String = "",
     val permissions: List<String> = emptyList(),
     @SerialName("timeout_seconds") val timeoutSeconds: Double = 30.0,
+    @SerialName("input_schema")
+    val inputSchema: kotlinx.serialization.json.JsonObject =
+        kotlinx.serialization.json.JsonObject(emptyMap()),
+)
+
+@Serializable
+data class CastResult(
+    @SerialName("execution_id") val executionId: String? = null,
+    val status: String = "",
+    val result: kotlinx.serialization.json.JsonElement? = null,
+    val error: String? = null,
 )
 
 @Serializable

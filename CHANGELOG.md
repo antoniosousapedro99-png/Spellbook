@@ -4,6 +4,14 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — tap-to-cast spells
+- Android: spell cards in Grimoire are now tappable — a cast dialog builds a
+  parameter form from the spell's input schema (required fields marked, lists
+  comma-separated) and runs it directly via `POST /api/spells/{id}/cast`,
+  bypassing the Familiar. The result status shows inline, and devices /
+  topology / findings / telemetry refresh after. (Casts still pass through VEIL
+  and target authorization — a scan outside an authorized scope returns denied.)
+
 ### Added — VEIL dashboard
 - `GET /api/veil/telemetry` now returns a rollup `summary` (op count, counts by
   visibility, total noise) alongside the rows.

@@ -26,6 +26,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import com.cybernomicon.grimoire.data.*
 import com.cybernomicon.grimoire.ui.AppViewModel
 import com.cybernomicon.grimoire.ui.ChatTurn
@@ -70,6 +75,7 @@ private fun ErrorBanner(state: UiState) {
 
 // ---- GRIMOIRE: connection + spell/daemon library --------------------------
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GrimoireScreen(vm: AppViewModel, state: UiState) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -135,12 +141,42 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
             InfoCard("${d.name} — ${d.role}", d.permissions.joinToString(), d.description)
         }
 
-        Text("Spells", style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp))
+        Row(Modifier.padding(start = 16.dp, top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Spells", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(8.dp))
+            Text("tap to cast", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary)
+        }
+        state.lastCast?.let {
+            Text(it, style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        }
+        var castTarget by remember { mutableStateOf<SpellSpec?>(null) }
         state.spells.forEach { s ->
-            InfoCard("${s.name}  v${s.version}",
-                "perms: ${s.permissions.joinToString().ifBlank { "none" }}",
-                s.description)
+            ElevatedCard(
+                onClick = { castTarget = s },
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("${s.name}  v${s.version} ⚡",
+                        style = MaterialTheme.typography.titleMedium)
+                    Text("perms: ${s.permissions.joinToString().ifBlank { "none" }}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary)
+                    if (s.description.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(s.description, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        castTarget?.let { sp ->
+            CastSpellDialog(sp,
+                onDismiss = { castTarget = null },
+                onCast = { params -> vm.castSpell(sp.id, params); castTarget = null })
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -559,4 +595,86 @@ private fun VeilControlCard(vm: AppViewModel, state: UiState) {
             }
         }
     }
+}
+
+// ---- Cast-a-spell dialog (direct, bypasses the Familiar) -------------------
+
+@Composable
+private fun CastSpellDialog(
+    spell: SpellSpec,
+    onDismiss: () -> Unit,
+    onCast: (Map<String, JsonElement>) -> Unit,
+) {
+    val props = (spell.inputSchema["properties"] as? JsonObject)
+        ?: JsonObject(emptyMap())
+    val required = (spell.inputSchema["required"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }?.toSet() ?: emptySet()
+    val fields = remember(spell.id) { mutableStateMapOf<String, String>() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cast ${spell.name} ⚡") },
+        text = {
+            Column {
+                if (props.isEmpty()) {
+                    Text("This spell takes no parameters — just cast it.")
+                }
+                props.forEach { (name, def) ->
+                    val d = def as? JsonObject
+                    val type = (d?.get("type") as? JsonPrimitive)?.contentOrNull ?: "string"
+                    val req = name in required
+                    OutlinedTextField(
+                        value = fields[name] ?: "",
+                        onValueChange = { fields[name] = it },
+                        singleLine = true,
+                        label = { Text(name + (if (req) " *" else "") + "  ($type)") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                }
+                if (props.isNotEmpty()) {
+                    Text("Lists are comma-separated, e.g. 22,80,443. " +
+                        "* = required.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onCast(buildParams(props, fields)) }) {
+                Text("Cast")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+private fun buildParams(
+    props: JsonObject,
+    fields: Map<String, String>,
+): Map<String, JsonElement> {
+    val out = mutableMapOf<String, JsonElement>()
+    for ((name, def) in props) {
+        val text = fields[name]?.trim().orEmpty()
+        if (text.isEmpty()) continue
+        val d = def as? JsonObject
+        val type = (d?.get("type") as? JsonPrimitive)?.contentOrNull ?: "string"
+        val itemsType = ((d?.get("items") as? JsonObject)?.get("type")
+                as? JsonPrimitive)?.contentOrNull
+        out[name] = when (type) {
+            "integer" -> text.toIntOrNull()?.let { JsonPrimitive(it) }
+                ?: JsonPrimitive(text)
+            "number" -> text.toDoubleOrNull()?.let { JsonPrimitive(it) }
+                ?: JsonPrimitive(text)
+            "boolean" -> JsonPrimitive(text.lowercase() == "true")
+            "array" -> JsonArray(text.split(",").mapNotNull {
+                val t = it.trim()
+                when {
+                    t.isEmpty() -> null
+                    itemsType == "integer" -> t.toIntOrNull()?.let { n -> JsonPrimitive(n) }
+                    else -> JsonPrimitive(t)
+                }
+            })
+            else -> JsonPrimitive(text)
+        }
+    }
+    return out
 }
