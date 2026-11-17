@@ -12,7 +12,7 @@ from fastapi import (Depends, FastAPI, HTTPException, WebSocket,
                      WebSocketDisconnect)
 
 from .app import (DAEMON_CATALOGUE, build_hub, familiar_chat, planner_status,
-                  summon_daemon)
+                  record_spell_effects, summon_daemon)
 from .auth import TokenAuth, make_dependency
 from .config import load_or_create_api_token, load_settings
 from .models import (AddTargetRequest, CastSpellRequest, ChatRequest,
@@ -61,6 +61,10 @@ def create_app() -> FastAPI:
             result = await hub.engine.execute(spell_id, body.params)
         except SpellNotFound:
             raise HTTPException(404, f"unknown spell: {spell_id}")
+        # Persist device-shaped results so a direct cast also fills the
+        # Astral Plane (not just summoning the Scryer daemon).
+        if result.status == "success":
+            record_spell_effects(hub.db, spell_id, result.result)
         return {
             "execution_id": result.execution_id,
             "status": result.status,

@@ -60,6 +60,23 @@ def _ollama(settings: Settings) -> OllamaClient:
                         settings.llm_timeout)
 
 
+def record_spell_effects(db: Database, spell_id: str, result) -> None:
+    """Persist device-shaped results so the Astral Plane fills whether a spell
+    was summoned via a daemon or cast directly. Safe to call repeatedly
+    (upserts)."""
+    if not isinstance(result, dict):
+        return
+    if spell_id == "scry":
+        for dev in result.get("devices", []):
+            db.upsert_device(dev["address"], hostname=dev.get("hostname"),
+                             status=dev.get("status", "up"),
+                             open_ports=dev.get("open_ports", []))
+    elif spell_id == "identify":
+        services = result.get("services", [])
+        db.upsert_device(result["address"], attributes={"services": [
+            {"port": s["port"], "guess": s["guess"]} for s in services]})
+
+
 async def summon_daemon(hub: HubState, key: str, objective: str,
                         scope: str | None) -> DaemonReport:
     daemon = build_daemon(key, hub.engine, hub.db)
@@ -130,4 +147,4 @@ async def planner_status(hub: HubState) -> dict:
 
 
 __all__ = ["HubState", "build_hub", "summon_daemon", "familiar_chat",
-           "planner_status", "DAEMON_CATALOGUE"]
+           "planner_status", "record_spell_effects", "DAEMON_CATALOGUE"]
