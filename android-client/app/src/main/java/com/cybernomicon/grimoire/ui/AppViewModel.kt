@@ -1,15 +1,19 @@
 package com.cybernomicon.grimoire.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cybernomicon.grimoire.BuildConfig
 import com.cybernomicon.grimoire.data.*
 import com.cybernomicon.grimoire.engine.LocalBackend
+import com.cybernomicon.grimoire.engine.MediaPipeLlm
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -35,6 +39,11 @@ data class UiState(
     val live: List<LiveEvent> = emptyList(),
     val liveConnected: Boolean = false,
     val supportsChat: Boolean = true,
+    // On-device model (Phase 3).
+    val modelPath: String = "",
+    val modelLoading: Boolean = false,
+    val modelLoaded: Boolean = false,
+    val modelError: String? = null,
     val lastReport: DaemonReport? = null,
     // Familiar conversation.
     val chat: List<ChatTurn> = emptyList(),
@@ -46,9 +55,10 @@ data class UiState(
 data class ChatTurn(val role: String, val text: String,
                     val trace: List<String> = emptyList())
 
-class AppViewModel : ViewModel() {
+class AppViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _state = MutableStateFlow(UiState())
+    private val _state = MutableStateFlow(UiState(
+        modelPath = (app.getExternalFilesDir(null)?.absolutePath ?: "") + "/model.bin"))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private var backend: Backend? = null
@@ -57,17 +67,48 @@ class AppViewModel : ViewModel() {
 
     fun setHubUrl(url: String) = _state.update { it.copy(hubUrl = url) }
     fun setToken(t: String) = _state.update { it.copy(token = t) }
+    fun setModelPath(p: String) = _state.update { it.copy(modelPath = p) }
     fun setLocalMode(on: Boolean) =
         _state.update { it.copy(localMode = on, connected = false) }
+
+    private fun ensureLocalBackend(): LocalBackend =
+        localBackend ?: LocalBackend().also { localBackend = it }
+
+    /** Load an on-device LLM from a file path, enabling the native Familiar. */
+    fun loadOnDeviceModel() {
+        val path = _state.value.modelPath.trim()
+        if (path.isEmpty()) return
+        viewModelScope.launch {
+            _state.update { it.copy(modelLoading = true, modelError = null) }
+            try {
+                val llm = withContext(Dispatchers.IO) {
+                    MediaPipeLlm.load(getApplication(), path)
+                }
+                ensureLocalBackend().attachLlm(llm)
+                val name = path.substringAfterLast('/')
+                _state.update {
+                    it.copy(modelLoading = false, modelLoaded = true,
+                        supportsChat = backend?.supportsChat ?: true,
+                        planner = PlannerStatus(planner = "on-device", model = name,
+                            available = true))
+                }
+            } catch (e: Throwable) {
+                _state.update {
+                    it.copy(modelLoading = false, modelLoaded = false,
+                        modelError = e.message ?: e.javaClass.simpleName)
+                }
+            }
+        }
+    }
 
     /** Connect to the chosen backend (on-device engine or remote hub). */
     fun connect() = run {
         val s = _state.value
         feed?.close(); feed = null
         if (s.localMode) {
-            val lb = localBackend ?: LocalBackend().also { localBackend = it }
+            val lb = ensureLocalBackend()
             backend = lb
-            _state.update { it.copy(liveConnected = false, supportsChat = false) }
+            _state.update { it.copy(liveConnected = false, supportsChat = lb.supportsChat) }
         } else {
             backend = RemoteBackend(HubClient.create(s.hubUrl, s.token))
             startLiveFeed(s.hubUrl, s.token)

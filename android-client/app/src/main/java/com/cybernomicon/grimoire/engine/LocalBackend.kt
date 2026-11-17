@@ -21,7 +21,16 @@ import kotlinx.serialization.json.putJsonObject
  */
 class LocalBackend(private val engine: LocalEngine = LocalEngine()) : Backend {
     override val supportsLiveFeed = false
-    override val supportsChat = false
+    override val supportsChat: Boolean get() = llm?.ready == true
+
+    private var llm: LlmEngine? = null
+    private var familiar: LocalFamiliar? = null
+
+    /** Attach a loaded on-device model, enabling the Familiar chat. */
+    fun attachLlm(engineLlm: LlmEngine) {
+        llm = engineLlm
+        familiar = LocalFamiliar(engineLlm, engine)
+    }
 
     override suspend fun spells(): List<SpellSpec> =
         engine.spells().map { s ->
@@ -101,11 +110,14 @@ class LocalBackend(private val engine: LocalEngine = LocalEngine()) : Backend {
             rep.findings, rep.summary)
     }
 
-    override suspend fun chat(message: String, conversationId: String?): ChatResponse =
-        ChatResponse(conversationId = conversationId ?: "local",
-            reply = "The Familiar's AI runs on-device in the next phase. For " +
-                "now, authorize a scope and tap Scry (Grimoire), or Summon " +
-                "the Scryer.", trace = emptyList())
+    override suspend fun chat(message: String, conversationId: String?): ChatResponse {
+        val f = familiar ?: return ChatResponse(conversationId ?: "local",
+            "Load an on-device model first (Grimoire → On-device AI), or switch " +
+                "to remote-hub mode for the Ollama-backed Familiar.", emptyList())
+        val turn = f.chat(message)
+        return ChatResponse(conversationId ?: "local", turn.reply,
+            turn.trace.map { ChatTrace(it.first, it.second) })
+    }
 
     // --- JSON input schemas so tap-to-cast renders the right fields -------
     private fun schemaFor(id: String): JsonObject = when (id) {

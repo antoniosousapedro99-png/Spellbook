@@ -124,6 +124,8 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
         }
         ErrorBanner(state)
 
+        if (state.localMode) OnDeviceModelCard(vm, state)
+
         VeilControlCard(vm, state)
 
         // Authorized scopes — the security boundary. Nothing is scanned until
@@ -702,4 +704,50 @@ private fun buildParams(
         }
     }
     return out
+}
+
+// ---- On-device AI model loader (Phase 3) ----------------------------------
+
+@Composable
+private fun OnDeviceModelCard(vm: AppViewModel, state: UiState) {
+    ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("On-device AI", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    when {
+                        state.modelLoaded -> "🜂 loaded"
+                        state.modelLoading -> "loading…"
+                        else -> "not loaded"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (state.modelLoaded) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("Loads a Gemma model so the Familiar runs on-device (no hub). " +
+                "Download a MediaPipe-format model and push it to the path below.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp))
+            OutlinedTextField(
+                value = state.modelPath, onValueChange = vm::setModelPath,
+                label = { Text("Model file path") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            state.modelError?.let {
+                Text("⚠ $it", color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
+            Row(Modifier.padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = vm::loadOnDeviceModel,
+                    enabled = !state.modelLoading && state.modelPath.isNotBlank()) {
+                    Text(if (state.modelLoaded) "Reload model" else "Load model")
+                }
+                if (state.modelLoading) CircularProgressIndicator(Modifier.size(22.dp))
+            }
+        }
+    }
 }

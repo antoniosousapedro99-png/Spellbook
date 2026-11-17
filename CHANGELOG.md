@@ -4,6 +4,20 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — on-device AI Familiar (Phase 3)
+- On-device LLM via **MediaPipe LLM Inference** (`tasks-genai`): `LlmEngine`
+  interface + `MediaPipeLlm` (loads a Gemma-style model file from a device path)
+  + `LocalFamiliar`, a Kotlin agentic chat loop (JSON decisions, tools
+  summon_scryer/list_devices/list_findings, lenient parsing, bounded). Wired
+  into `LocalBackend.chat()`; `supportsChat` turns true once a model is loaded.
+- Grimoire gains an **On-device AI** card (model path + Load, with status/errors);
+  the ViewModel is now an `AndroidViewModel` and loads the model off the main
+  thread. With a model loaded, the Familiar runs fully on-device — no Ollama.
+- 4 JVM unit tests for the Familiar loop with a stub LLM (plain reply, JSON
+  extraction from prose, real tool run through the engine, unknown-tool
+  containment). *Actual model inference is untested here — it only runs on a
+  device, and a 2B model needs more RAM than some phones have free.*
+
 ### Changed — Cyberdeck rebrand + native engine wired in (Phase 2)
 - The Android app is renamed **Cyberdeck** (launcher label + title bar) with a
   cyberpunk theme pass: near-black voids, neon violet/cyan/magenta, and a

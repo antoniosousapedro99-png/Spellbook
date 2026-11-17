@@ -66,6 +66,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // On-device LLM (Phase 3) — MediaPipe LLM Inference (Gemma et al.).
+    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

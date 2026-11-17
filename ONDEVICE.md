@@ -131,6 +131,33 @@ Environment overrides (all optional):
 
 ---
 
+## Fully on-device AI (Cyberdeck app, Phase 3)
+
+The **Cyberdeck** app can run the Familiar's AI on-device with **no hub and no
+Ollama**, via MediaPipe (Gemma). This is separate from the Termux path above —
+it's all inside the app.
+
+1. In the app: **Grimoire** → Engine toggle **on-device** → **Power on**.
+2. Get a MediaPipe-format model file (a Gemma CPU build, e.g.
+   `gemma-2b-it-cpu-int4.bin`, ~1.3 GB) from the official MediaPipe / LiteRT
+   model pages. It must match the MediaPipe LLM Inference format.
+3. Put the file where the app can read it. The most reliable way is to push it
+   into the app's own files directory (no storage permission needed), which is
+   also the default path the app shows:
+   ```bash
+   adb push gemma-2b-it-cpu-int4.bin \
+     /sdcard/Android/data/com.cybernomicon.grimoire/files/model.bin
+   ```
+4. In **Grimoire → On-device AI**, confirm the path and tap **Load model**.
+   When it shows `🜂 loaded`, open **Familiar** and chat — it's running on-device.
+
+⚠️ **Honest caveats:** a 2B model needs well over 1 GB of free RAM to run; on a
+phone with little free memory it may fail to load or be very slow. Model/format
+compatibility with the MediaPipe version can be finicky. If on-device AI won't
+run on your phone, just flip the Engine toggle to **remote hub** and use the
+Ollama-backed Familiar — scanning still works fully on-device either way. (A
+built-in model file-picker is a planned improvement over the `adb push` step.)
+
 ## Caveats
 - On‑phone models are **slower** (a few seconds per reply on a 3B) — normal.
 - If `pip install --break-system-packages` errors or `pydantic` won't build,
