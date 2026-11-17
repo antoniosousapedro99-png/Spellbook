@@ -63,6 +63,8 @@ phone, or fully on-device via Termux) and where to run the Android app.
 New to the local AI? [ONDEVICE.md](ONDEVICE.md) is a step-by-step ELI5 guide to
 setting up Ollama — including running it **entirely on your phone**.
 
+Want to practice offensive security **lawfully**? [lab/](lab/README.md) sets up a self-owned, isolated vulnerable lab to attack (never anyone else's systems).
+
 ## Quick start — Daemon Hub
 
 ```bash

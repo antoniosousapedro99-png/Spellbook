@@ -1,0 +1,42 @@
+# Cyberdeck practice lab — intentionally-vulnerable targets for LAWFUL,
+# self-owned offensive-security practice.
+#
+# ⚠️  These images are DELIBERATELY insecure. Run them only on a machine you
+#     own, never expose them to your LAN or the internet, and only attack them.
+#     All ports are bound to 127.0.0.1 so nothing is reachable from your network.
+#
+#   docker compose -f lab/docker-compose.yml up -d
+#   # practice, then:
+#   docker compose -f lab/docker-compose.yml down
+#
+# Targets (browse / attack from the SAME machine):
+#   DVWA        http://127.0.0.1:8081   (login admin / password, then /setup.php)
+#   Juice Shop  http://127.0.0.1:8082
+#   WebGoat     http://127.0.0.1:8083/WebGoat
+
+services:
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: lab-dvwa
+    ports: ["127.0.0.1:8081:80"]
+    networks: [lab]
+    restart: unless-stopped
+
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: lab-juiceshop
+    ports: ["127.0.0.1:8082:3000"]
+    networks: [lab]
+    restart: unless-stopped
+
+  webgoat:
+    image: webgoat/webgoat:latest
+    container_name: lab-webgoat
+    ports: ["127.0.0.1:8083:8080"]
+    networks: [lab]
+    restart: unless-stopped
+
+# A dedicated bridge network keeps the targets grouped and off your LAN.
+networks:
+  lab:
+    driver: bridge
