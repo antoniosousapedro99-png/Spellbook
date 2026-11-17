@@ -271,10 +271,14 @@ fun FamiliarScreen(vm: AppViewModel, state: UiState) {
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (state.chat.isEmpty()) {
                 item {
-                    Text("Ask the Familiar to investigate. e.g. “scan my lab " +
+                    val hint = if (!state.supportsChat)
+                        "The AI Familiar is asleep. Load an on-device model " +
+                            "(Grimoire → On-device AI), or switch the Engine to " +
+                            "remote hub for the Ollama Familiar."
+                    else "Ask the Familiar to investigate. e.g. “scan my lab " +
                         "and tell me what services are exposed.” It can summon " +
-                        "daemons and read the Astral Plane and Chronicle for you.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "daemons and read the Astral Plane and Chronicle for you."
+                    Text(hint, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp))
                 }

@@ -1,6 +1,7 @@
 package com.cybernomicon.grimoire.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cybernomicon.grimoire.BuildConfig
@@ -57,19 +58,32 @@ data class ChatTurn(val role: String, val text: String,
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
+    private val prefs = app.getSharedPreferences("cyberdeck", Context.MODE_PRIVATE)
+    private val defaultModelPath =
+        (app.getExternalFilesDir(null)?.absolutePath ?: "") + "/model.bin"
+
     private val _state = MutableStateFlow(UiState(
-        modelPath = (app.getExternalFilesDir(null)?.absolutePath ?: "") + "/model.bin"))
+        localMode = prefs.getBoolean("localMode", true),
+        hubUrl = prefs.getString("hubUrl", BuildConfig.DEFAULT_HUB_URL)!!,
+        token = prefs.getString("token", "")!!,
+        modelPath = prefs.getString("modelPath", defaultModelPath)!!))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private var backend: Backend? = null
     private var localBackend: LocalBackend? = null   // kept so data survives relink
     private var feed: LiveFeedClient? = null
 
-    fun setHubUrl(url: String) = _state.update { it.copy(hubUrl = url) }
-    fun setToken(t: String) = _state.update { it.copy(token = t) }
-    fun setModelPath(p: String) = _state.update { it.copy(modelPath = p) }
-    fun setLocalMode(on: Boolean) =
+    private fun save(key: String, value: Any) = prefs.edit().apply {
+        when (value) { is Boolean -> putBoolean(key, value); is String -> putString(key, value) }
+    }.apply()
+
+    fun setHubUrl(url: String) { save("hubUrl", url); _state.update { it.copy(hubUrl = url) } }
+    fun setToken(t: String) { save("token", t); _state.update { it.copy(token = t) } }
+    fun setModelPath(p: String) { save("modelPath", p); _state.update { it.copy(modelPath = p) } }
+    fun setLocalMode(on: Boolean) {
+        save("localMode", on)
         _state.update { it.copy(localMode = on, connected = false) }
+    }
 
     private fun ensureLocalBackend(): LocalBackend =
         localBackend ?: LocalBackend().also { localBackend = it }

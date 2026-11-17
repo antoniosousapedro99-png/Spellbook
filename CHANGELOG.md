@@ -4,6 +4,15 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — polish & persistence
+- Settings now persist across launches (SharedPreferences): engine mode
+  (on-device/remote), hub URL, API token, and the on-device model path — no
+  more re-entering them every time the app opens.
+- A real **adaptive launcher icon** (vector; neon violet crescent + cyan node
+  on a dark grid) and the app now declares it.
+- The Familiar's empty state explains how to wake the AI (load an on-device
+  model, or switch to remote-hub mode) when chat isn't available.
+
 ### Added — on-device AI Familiar (Phase 3)
 - On-device LLM via **MediaPipe LLM Inference** (`tasks-genai`): `LlmEngine`
   interface + `MediaPipeLlm` (loads a Gemma-style model file from a device path)
