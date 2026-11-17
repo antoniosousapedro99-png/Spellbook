@@ -4,6 +4,13 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — in-app model picker
+- Pick a model file from anywhere (Downloads, SD card) via the Storage Access
+  Framework — no more `adb push`. Because MediaPipe needs a real file path, the
+  app copies the picked file into its own storage (with a live progress bar)
+  and then loads it. The manual "load from a path" option remains for
+  adb-pushed files.
+
 ### Added — polish & persistence
 - Settings now persist across launches (SharedPreferences): engine mode
   (on-device/remote), hub URL, API token, and the on-device model path — no

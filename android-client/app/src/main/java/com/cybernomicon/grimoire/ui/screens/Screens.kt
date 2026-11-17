@@ -1,5 +1,7 @@
 package com.cybernomicon.grimoire.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -714,6 +716,10 @@ private fun buildParams(
 
 @Composable
 private fun OnDeviceModelCard(vm: AppViewModel, state: UiState) {
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importModelFromUri(uri)
+    }
     ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -722,6 +728,7 @@ private fun OnDeviceModelCard(vm: AppViewModel, state: UiState) {
                 Text(
                     when {
                         state.modelLoaded -> "🜂 loaded"
+                        state.importProgress in 0..100 -> "importing ${state.importProgress}%"
                         state.modelLoading -> "loading…"
                         else -> "not loaded"
                     },
@@ -729,28 +736,40 @@ private fun OnDeviceModelCard(vm: AppViewModel, state: UiState) {
                     color = if (state.modelLoaded) MaterialTheme.colorScheme.secondary
                             else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("Loads a Gemma model so the Familiar runs on-device (no hub). " +
-                "Download a MediaPipe-format model and push it to the path below.",
+            Text("Pick a MediaPipe-format Gemma model file and it's copied in and " +
+                "loaded — the Familiar then runs on-device, no hub.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp))
-            OutlinedTextField(
-                value = state.modelPath, onValueChange = vm::setModelPath,
-                label = { Text("Model file path") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+
+            if (state.importProgress in 0..100) {
+                LinearProgressIndicator(progress = { state.importProgress / 100f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            }
             state.modelError?.let {
                 Text("⚠ $it", color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 4.dp))
             }
+
             Row(Modifier.padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = vm::loadOnDeviceModel,
-                    enabled = !state.modelLoading && state.modelPath.isNotBlank()) {
-                    Text(if (state.modelLoaded) "Reload model" else "Load model")
+                Button(onClick = { picker.launch(arrayOf("*/*")) },
+                    enabled = !state.modelLoading) {
+                    Text(if (state.modelLoaded) "Pick another" else "Pick model file")
                 }
                 if (state.modelLoading) CircularProgressIndicator(Modifier.size(22.dp))
+            }
+
+            // Advanced: load from an explicit path (e.g. an adb-pushed file).
+            OutlinedTextField(
+                value = state.modelPath, onValueChange = vm::setModelPath,
+                label = { Text("…or load from a path") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+            TextButton(onClick = vm::loadOnDeviceModel,
+                enabled = !state.modelLoading && state.modelPath.isNotBlank()) {
+                Text("Load from path")
             }
         }
     }

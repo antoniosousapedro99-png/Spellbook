@@ -45,6 +45,7 @@ data class UiState(
     val modelLoading: Boolean = false,
     val modelLoaded: Boolean = false,
     val modelError: String? = null,
+    val importProgress: Int = -1,   // 0..100 while copying a picked model, else -1
     val lastReport: DaemonReport? = null,
     // Familiar conversation.
     val chat: List<ChatTurn> = emptyList(),
@@ -87,6 +88,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun ensureLocalBackend(): LocalBackend =
         localBackend ?: LocalBackend().also { localBackend = it }
+
+    /** Import a model picked via SAF (a content URI): copy it into app storage,
+     *  then load it. Removes the need for `adb push`. */
+    fun importModelFromUri(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _state.update { it.copy(modelLoading = true, modelError = null, importProgress = 0) }
+            try {
+                val dest = java.io.File(getApplication<Application>().filesDir, "model.bin")
+                withContext(Dispatchers.IO) { copyUriToFile(uri, dest) { pct ->
+                    _state.update { it.copy(importProgress = pct) } } }
+                save("modelPath", dest.absolutePath)
+                _state.update { it.copy(modelPath = dest.absolutePath, importProgress = -1) }
+                val llm = withContext(Dispatchers.IO) {
+                    MediaPipeLlm.load(getApplication(), dest.absolutePath) }
+                ensureLocalBackend().attachLlm(llm)
+                _state.update {
+                    it.copy(modelLoading = false, modelLoaded = true,
+                        supportsChat = backend?.supportsChat ?: true,
+                        planner = PlannerStatus(planner = "on-device",
+                            model = "imported model", available = true))
+                }
+            } catch (e: Throwable) {
+                _state.update { it.copy(modelLoading = false, importProgress = -1,
+                    modelError = e.message ?: e.javaClass.simpleName) }
+            }
+        }
+    }
+
+    private fun copyUriToFile(uri: android.net.Uri, dest: java.io.File,
+                              onProgress: (Int) -> Unit) {
+        val resolver = getApplication<Application>().contentResolver
+        val total = resolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+        resolver.openInputStream(uri)?.use { input ->
+            java.io.FileOutputStream(dest).use { out ->
+                val buf = ByteArray(1 shl 16)
+                var copied = 0L
+                var last = -1
+                while (true) {
+                    val n = input.read(buf); if (n < 0) break
+                    out.write(buf, 0, n); copied += n
+                    if (total > 0) {
+                        val pct = (copied * 100 / total).toInt()
+                        if (pct != last) { last = pct; onProgress(pct) }
+                    }
+                }
+            }
+        } ?: throw java.io.IOException("could not open the selected file")
+    }
 
     /** Load an on-device LLM from a file path, enabling the native Familiar. */
     fun loadOnDeviceModel() {
