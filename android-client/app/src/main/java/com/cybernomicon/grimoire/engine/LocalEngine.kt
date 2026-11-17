@@ -45,6 +45,27 @@ class LocalEngine {
     suspend fun summonScryer(objective: String, scope: String?): DaemonRunReport =
         scryer.run(objective, scope)
 
+    /** Run a user-authored JavaScript spell under VEIL + authorization. */
+    suspend fun runScript(name: String, source: String, host: String?): ScriptResult {
+        val api = SpellApi(Authorization(store.authorizedCidrs()), store)
+        val res = try {
+            veil.withGate {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ScriptRunner.run(source, host, api)
+                }
+            }
+        } catch (e: EmergencyStop) {
+            ScriptResult("halted", "", api.logs, api.findingsAdded, e.message)
+        }
+        if (api.probes > 0) {
+            val vis = when { api.probes < 50 -> "low"; api.probes < 500 -> "medium"; else -> "high" }
+            store.addTelemetry(TelemetryRow(spellId = "forge:$name",
+                intensity = veil.intensity.label, noiseScore = api.probes.toDouble(),
+                visibility = vis, hosts = api.hosts.size, ports = api.probes))
+        }
+        return res
+    }
+
     private fun recordEffects(spellId: String, result: Map<String, Any?>?) {
         if (result == null) return
         when (spellId) {

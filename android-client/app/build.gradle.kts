@@ -69,6 +69,9 @@ dependencies {
     // On-device LLM (Phase 3) — MediaPipe LLM Inference (Gemma et al.).
     implementation("com.google.mediapipe:tasks-genai:0.10.14")
 
+    // Scriptable spells — Rhino JS engine (pure JVM, runs on Android interpreted).
+    implementation("org.mozilla:rhino:1.7.14")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

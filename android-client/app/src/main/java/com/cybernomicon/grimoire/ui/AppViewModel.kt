@@ -8,6 +8,7 @@ import com.cybernomicon.grimoire.BuildConfig
 import com.cybernomicon.grimoire.data.*
 import com.cybernomicon.grimoire.engine.LocalBackend
 import com.cybernomicon.grimoire.engine.MediaPipeLlm
+import com.cybernomicon.grimoire.engine.NetUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +54,10 @@ data class UiState(
     val chat: List<ChatTurn> = emptyList(),
     val conversationId: String? = null,
     val chatBusy: Boolean = false,
+    // Forge (custom JS spells).
+    val customSpells: List<CustomSpell> = emptyList(),
+    val scriptBusy: Boolean = false,
+    val scriptOutput: String? = null,
 )
 
 /** A single rendered chat bubble. `trace` holds any tool calls the Familiar ran. */
@@ -286,6 +293,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** One tap: detect the network this device is on, authorize it, and scan. */
+    fun scanMyNetwork() = withBackend { b ->
+        val cidr = NetUtil.detectLocalCidr()
+        if (cidr == null) {
+            _state.update { it.copy(error =
+                "Couldn't auto-detect your network — type your CIDR below and tap Scan.") }
+            return@withBackend
+        }
+        authorizeAndScan(b, cidr, "my network")
+    }
+
+    /** Manual workaround: authorize + scan a CIDR you type. Typing it is you
+     *  asserting you're permitted to test that network. */
+    fun scanScope(cidr: String) = withBackend { b ->
+        val c = cidr.trim()
+        if (c.isEmpty()) return@withBackend
+        authorizeAndScan(b, c, "manual")
+    }
+
+    private suspend fun authorizeAndScan(b: Backend, cidr: String, label: String) {
+        _state.update { it.copy(busy = true, error = null, lastCast = "scanning $cidr…") }
+        try {
+            if (b.targets().none { it.cidr == cidr }) b.addTarget(cidr, label)
+            pushLive("spell.start", "scry $cidr")
+            val r = b.cast("scry", mapOf("scope" to JsonPrimitive(cidr)))
+            val msg = "⚡ scry $cidr → ${r.status}" + summarizeCast("scry", r.result)
+            pushLive("spell.${r.status}", msg)
+            _state.update {
+                it.copy(busy = false, lastCast = msg, targets = b.targets(),
+                    devices = b.devices(),
+                    topology = runCatching { b.topology() }.getOrNull() ?: it.topology,
+                    findings = b.findings(),
+                    telemetry = runCatching { b.veilTelemetry() }.getOrNull() ?: it.telemetry)
+            }
+        } catch (e: Exception) {
+            _state.update { it.copy(busy = false, error = e.message) }
+        }
+    }
+
     private fun summarizeCast(spellId: String, result: JsonElement?): String {
         val obj = result as? JsonObject ?: return ""
         fun arrSize(k: String) = (obj[k] as? JsonArray)?.size ?: 0
@@ -316,4 +362,91 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val b = backend ?: return
         viewModelScope.launch { block(b) }
     }
+
+    // --- Forge: user-authored JS spells -----------------------------------
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val spellsFile by lazy {
+        java.io.File(getApplication<Application>().filesDir, "spells.json")
+    }
+
+    init { loadCustomSpells() }
+
+    private fun loadCustomSpells() {
+        val loaded = try {
+            if (spellsFile.exists())
+                json.decodeFromString<List<CustomSpell>>(spellsFile.readText())
+            else emptyList()
+        } catch (e: Exception) { emptyList() }
+        _state.update { it.copy(customSpells = loaded.ifEmpty { seedSpells() }) }
+    }
+
+    private fun persistSpells(list: List<CustomSpell>) {
+        try { spellsFile.writeText(json.encodeToString(list)) } catch (_: Exception) {}
+    }
+
+    fun saveSpell(id: String?, name: String, source: String) {
+        val sid = id ?: java.util.UUID.randomUUID().toString()
+        val spell = CustomSpell(sid, name.ifBlank { "unnamed" }, source)
+        val list = _state.value.customSpells.filter { it.id != sid } + spell
+        persistSpells(list)
+        _state.update { it.copy(customSpells = list.sortedBy { s -> s.name }) }
+    }
+
+    fun deleteSpell(id: String) {
+        val list = _state.value.customSpells.filter { it.id != id }
+        persistSpells(list)
+        _state.update { it.copy(customSpells = list) }
+    }
+
+    /** Run a Forge spell on-device (requires on-device engine powered on). */
+    fun runSpell(name: String, source: String, target: String) {
+        val lb = localBackend
+        viewModelScope.launch {
+            if (lb == null || !_state.value.localMode || !_state.value.connected) {
+                _state.update { it.copy(scriptOutput =
+                    "The Forge runs on-device. Set Engine to on-device and Power on first.") }
+                return@launch
+            }
+            _state.update { it.copy(scriptBusy = true, scriptOutput = null) }
+            pushLive("spell.start", "forge:$name")
+            val r = lb.runScript(name, source, target.ifBlank { null })
+            val out = buildString {
+                appendLine("status: ${r.status}")
+                r.error?.let { appendLine("error: $it") }
+                r.logs.forEach { appendLine("· $it") }
+                if (r.output.isNotBlank()) appendLine("=> ${r.output}")
+                append("findings added: ${r.findingsAdded}")
+            }
+            pushLive("spell.${r.status}", "forge:$name · ${r.findingsAdded} finding(s)")
+            _state.update {
+                it.copy(scriptBusy = false, scriptOutput = out,
+                    findings = lb.findings(),
+                    telemetry = runCatching { lb.veilTelemetry() }.getOrNull() ?: it.telemetry)
+            }
+        }
+    }
+
+    private fun seedSpells(): List<CustomSpell> = listOf(
+        CustomSpell(java.util.UUID.randomUUID().toString(), "Port sweep", """
+            // Enter your authorized CIDR as the Target, then Run.
+            var hosts = expand(scope);
+            var ports = [22, 80, 443, 445, 8080, 3389];
+            var found = 0;
+            for (var i = 0; i < hosts.length; i++) {
+              for (var j = 0; j < ports.length; j++) {
+                if (connect(hosts[i], ports[j], 500)) {
+                  addFinding('open', hosts[i] + ':' + ports[j] + ' open', '', 'info');
+                  log(hosts[i] + ':' + ports[j]);
+                  found++;
+                }
+              }
+            }
+            'found ' + found + ' open ports';
+        """.trimIndent()),
+        CustomSpell(java.util.UUID.randomUUID().toString(), "Banner grab", """
+            // Enter a single authorized host as the Target, then Run.
+            var b = banner(host, 22, 1500);
+            if (b) { addFinding('banner', host + ':22', b, 'info'); }
+            b || 'no banner on port 22';
+        """.trimIndent()))
 }

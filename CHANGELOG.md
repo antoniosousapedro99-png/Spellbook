@@ -4,6 +4,23 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — the Forge (scriptable spells) + one-tap scanning
+- **Forge**: author your own spells in JavaScript, run on-device. An embedded
+  Rhino engine (interpreted, instruction-count timeout sandbox) exposes an
+  authorization-gated API — `connect`, `banner`, `addFinding`, `expand`,
+  `devices`, `log`, `authorized` — where every network call still asserts the
+  target is within an authorized scope and still passes through VEIL. Spells
+  persist on-device; two examples seeded (Port sweep, Banner grab). The Rituals
+  tab is now the Forge (name/target/code editor + run + output console).
+  5 JVM unit tests (real-socket connect, unauthorized→denied, loop timeout,
+  log capture, return value).
+- **One-tap scanning of your own network**: "⚡ Scan my network" auto-detects
+  the device's subnet, authorizes it, and scans — no typing. A manual
+  "⚡ Scan" on a typed CIDR is the fallback when auto-detect can't resolve the
+  network. Both still require *declaring* the scope (the authorization
+  boundary is unchanged and intact — Cyberdeck only scans scopes the operator
+  declares they're permitted to test).
+
 ### Added — in-app model picker
 - Pick a model file from anywhere (Downloads, SD card) via the Storage Access
   Framework — no more `adb push`. Because MediaPipe needs a real file path, the

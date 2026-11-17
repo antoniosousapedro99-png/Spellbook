@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -140,6 +141,12 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
                 Text("Only networks you are permitted to test.",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // One-tap: detect + authorize + scan the network you're on.
+                Button(onClick = vm::scanMyNetwork,
+                    enabled = state.connected && !state.busy,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Text("⚡ Scan my network (auto-detect)")
+                }
                 state.targets.forEach {
                     Text("• ${it.cidr}${if (it.label.isNotBlank()) "  (${it.label})" else ""}",
                         style = MaterialTheme.typography.bodyMedium,
@@ -152,11 +159,18 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
                 OutlinedTextField(label, { label = it },
                     label = { Text("Label (optional)") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-                Button(
-                    onClick = { vm.authorizeTarget(cidr, label); cidr = ""; label = "" },
-                    enabled = state.connected && !state.busy && cidr.isNotBlank(),
-                    modifier = Modifier.padding(top = 12.dp)) {
-                    Text("Authorize")
+                Row(Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { vm.scanScope(cidr); cidr = "" },
+                        enabled = state.connected && !state.busy && cidr.isNotBlank()) {
+                        Text("⚡ Scan")
+                    }
+                    OutlinedButton(
+                        onClick = { vm.authorizeTarget(cidr, label); cidr = ""; label = "" },
+                        enabled = state.connected && !state.busy && cidr.isNotBlank()) {
+                        Text("Authorize only")
+                    }
                 }
             }
         }
@@ -346,12 +360,82 @@ private fun ChatBubble(turn: ChatTurn) {
 
 // ---- RITUALS: placeholder for Phase VI ------------------------------------
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RitualsScreen() {
-    Column(Modifier.fillMaxSize()) {
-        SectionTitle("Rituals")
-        EmptyHint("Workflow rituals arrive in Phase VI: chain spells and " +
-            "daemons with conditions, scheduling and approval checkpoints.")
+fun RitualsScreen(vm: AppViewModel, state: UiState) {
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var target by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("// Write a spell. 'scope'/'host' = Target.\n") }
+
+    fun load(s: CustomSpell) { selectedId = s.id; name = s.name; code = s.source }
+    fun newSpell() { selectedId = null; name = ""; code = "// new spell\n" }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Forge", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.width(8.dp))
+            Text("code your own spells", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary)
+        }
+
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.customSpells.forEach { s ->
+                FilterChip(selected = s.id == selectedId, onClick = { load(s) },
+                    label = { Text(s.name) })
+            }
+            AssistChip(onClick = { newSpell() }, label = { Text("+ new") })
+        }
+
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            OutlinedTextField(name, { name = it }, label = { Text("Spell name") },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(target, { target = it },
+                label = { Text("Target — host or CIDR (authorized)") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            OutlinedTextField(code, { code = it }, label = { Text("Spell code (JavaScript)") },
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontSize = 13.sp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp).padding(top = 8.dp))
+
+            Row(Modifier.padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { vm.runSpell(name, code, target) },
+                    enabled = !state.scriptBusy) { Text("⚡ Run") }
+                OutlinedButton(onClick = { vm.saveSpell(selectedId, name, code) }) {
+                    Text("Save")
+                }
+                selectedId?.let { id ->
+                    TextButton(onClick = { vm.deleteSpell(id); newSpell() }) { Text("Delete") }
+                }
+                if (state.scriptBusy) CircularProgressIndicator(Modifier.size(20.dp))
+            }
+
+            state.scriptOutput?.let { out ->
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                    Text(out, style = androidx.compose.ui.text.TextStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        modifier = Modifier.padding(12.dp))
+                }
+            }
+
+            Text("API: connect(host,port) · banner(host,port) · " +
+                "addFinding(kind,title[,detail,severity]) · expand(scope) · " +
+                "devices() · log(msg) · authorized(host). Network calls only hit " +
+                "authorized scopes; runs on-device.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp))
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

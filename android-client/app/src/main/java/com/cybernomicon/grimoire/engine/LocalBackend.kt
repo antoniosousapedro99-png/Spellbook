@@ -32,6 +32,10 @@ class LocalBackend(private val engine: LocalEngine = LocalEngine()) : Backend {
         familiar = LocalFamiliar(engineLlm, engine)
     }
 
+    /** Run a user-authored JavaScript spell (Forge). */
+    suspend fun runScript(name: String, source: String, host: String?): ScriptResult =
+        engine.runScript(name, source, host)
+
     override suspend fun spells(): List<SpellSpec> =
         engine.spells().map { s ->
             SpellSpec(id = s.id, name = s.name, version = s.version,

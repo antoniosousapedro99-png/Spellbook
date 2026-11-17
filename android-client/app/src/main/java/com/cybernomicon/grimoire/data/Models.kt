@@ -169,6 +169,9 @@ data class DaemonReport(
 data class CastBody(val params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap())
 
 @Serializable
+data class CustomSpell(val id: String, val name: String, val source: String)
+
+@Serializable
 data class ChatBody(val message: String, val conversation_id: String? = null)
 
 @Serializable

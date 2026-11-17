@@ -78,7 +78,7 @@ fun GrimoireApp(vm: AppViewModel) {
             composable(Section.Grimoire.route) { GrimoireScreen(vm, state) }
             composable(Section.Astral.route) { AstralPlaneScreen(state) }
             composable(Section.Familiar.route) { FamiliarScreen(vm, state) }
-            composable(Section.Rituals.route) { RitualsScreen() }
+            composable(Section.Rituals.route) { RitualsScreen(vm, state) }
             composable(Section.Chronicle.route) { ChronicleScreen(state) }
         }
     }
