@@ -170,6 +170,7 @@ class AppViewModel : ViewModel() {
             try {
                 val r = a.cast(spellId, CastBody(params))
                 val msg = "⚡ $spellId → ${r.status}" +
+                    summarizeCast(spellId, r.result) +
                     (r.error?.let { e -> ": $e" } ?: "")
                 _state.update {
                     it.copy(busy = false, lastCast = msg,
@@ -184,6 +185,25 @@ class AppViewModel : ViewModel() {
                 _state.update { it.copy(busy = false, error = e.message) }
             }
         }
+
+    /** Turn a cast result into a human summary (e.g. how many hosts scry found). */
+    private fun summarizeCast(
+        spellId: String,
+        result: kotlinx.serialization.json.JsonElement?,
+    ): String {
+        val obj = result as? kotlinx.serialization.json.JsonObject ?: return ""
+        fun arrSize(k: String) =
+            (obj[k] as? kotlinx.serialization.json.JsonArray)?.size ?: 0
+        fun intOf(k: String) =
+            (obj[k] as? kotlinx.serialization.json.JsonPrimitive)
+                ?.content?.toIntOrNull() ?: 0
+        return when (spellId) {
+            "scry" -> " · scanned ${intOf("hosts_scanned")}, " +
+                "found ${arrSize("devices")} device(s)"
+            "identify" -> " · ${arrSize("services")} service(s)"
+            else -> ""
+        }
+    }
 
     // --- VEIL controls ----------------------------------------------------
     fun setIntensity(level: String) = withApi { a ->

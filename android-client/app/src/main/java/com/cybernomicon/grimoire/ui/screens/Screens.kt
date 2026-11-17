@@ -192,8 +192,11 @@ fun AstralPlaneScreen(state: UiState) {
     Column(Modifier.fillMaxSize()) {
         SectionTitle("Astral Plane")
         if (topo == null || topo.nodes.isEmpty()) {
-            EmptyHint("The plane is dark. Summon Scryer from the Familiar to " +
-                "discover devices, and they will appear here as a map.")
+            EmptyHint("The plane is dark — no devices discovered yet.\n\n" +
+                "Cast Scry (Grimoire ⚡) or summon Scryer on an authorized " +
+                "scope. If a scan reports success but finds 0 devices, the " +
+                "scope probably doesn't match your network — check your " +
+                "phone's IP and scan that /24 (e.g. 192.168.1.0/24).")
         } else {
             // Detail of the tapped node.
             selected?.let { n ->
