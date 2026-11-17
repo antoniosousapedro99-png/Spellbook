@@ -4,6 +4,25 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Added — native engine (Phase 1 of the all-in-one app)
+- A pure-Kotlin on-device engine under `android-client/.../engine/`, porting the
+  core from Python so scanning can run entirely inside the app (no Termux, no
+  hub): `Authorization` (IPv4 CIDR scope boundary), `VeilCore` (intensity, rate
+  limiting, inter-op spacing, kill-switch, impact/telemetry), the `SpellEngine`
+  (VEIL gate → timeout → telemetry), native `scry`/`identify`/`archive` spells
+  (coroutines + java.net sockets), the `Scryer` daemon, topology inference, an
+  in-memory `EngineStore`, and a `LocalEngine` facade mirroring the hub API.
+- 10 JVM unit tests (run on the build host, no device needed) covering
+  authorization/expand, VEIL presets, topology gateway inference, SCRY/IDENTIFY
+  against a real localhost listener, the Scryer daemon end-to-end, and the
+  emergency-stop halt/resume path. (Phase 2 wires the UI + Room; Phase 3 adds
+  the on-device LLM Familiar to remove Ollama.)
+
+### Added — persist device results on direct cast
+- `record_spell_effects()` persists scry/identify results on a direct cast (the
+  cast endpoint calls it), so tap-casting Scry fills the Astral Plane — not just
+  summoning the Scryer daemon.
+
 ### Added — tap-to-cast spells
 - Android: spell cards in Grimoire are now tappable — a cast dialog builds a
   parameter form from the spell's input schema (required fields marked, lists
