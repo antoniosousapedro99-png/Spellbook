@@ -1,6 +1,6 @@
 package com.cybernomicon.grimoire.engine
 
-data class DaemonReport(
+data class DaemonRunReport(
     val daemon: String,
     val objective: String,
     val stepsRun: Int,
@@ -15,18 +15,18 @@ data class DaemonReport(
  */
 class Scryer(private val engine: SpellEngine, private val store: EngineStore) {
 
-    suspend fun run(objective: String, scope: String?): DaemonReport {
+    suspend fun run(objective: String, scope: String?): DaemonRunReport {
         val findings = mutableListOf<String>()
         var steps = 0
         if (scope.isNullOrBlank()) {
-            return DaemonReport("scryer", objective, 0,
+            return DaemonRunReport("scryer", objective, 0,
                 listOf("no scope provided"), "Scryer needs an authorized scope.")
         }
 
         val scryRes = engine.execute("scry", mapOf("scope" to scope))
         steps++
         if (!scryRes.ok) {
-            return DaemonReport("scryer", objective, steps,
+            return DaemonRunReport("scryer", objective, steps,
                 listOf("scry ${scryRes.status}: ${scryRes.error}"),
                 "Scryer could not scan $scope (${scryRes.status}).")
         }
@@ -72,7 +72,7 @@ class Scryer(private val engine: SpellEngine, private val store: EngineStore) {
         steps++
 
         val fingerprinted = findings.count { it.startsWith("Identified") }
-        return DaemonReport("scryer", objective, steps, findings,
+        return DaemonRunReport("scryer", objective, steps, findings,
             "Scryer finished reconnaissance for '$objective': " +
                 "$fingerprinted device(s) fingerprinted.")
     }

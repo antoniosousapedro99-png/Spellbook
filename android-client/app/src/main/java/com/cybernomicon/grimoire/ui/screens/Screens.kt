@@ -82,19 +82,41 @@ fun GrimoireScreen(vm: AppViewModel, state: UiState) {
         SectionTitle("Grimoire")
         ElevatedCard(Modifier.fillMaxWidth().padding(16.dp)) {
             Column(Modifier.padding(16.dp)) {
-                Text("Daemon Hub", style = MaterialTheme.typography.titleMedium)
-                OutlinedTextField(
-                    value = state.hubUrl, onValueChange = vm::setHubUrl,
-                    label = { Text("Hub URL") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-                OutlinedTextField(
-                    value = state.token, onValueChange = vm::setToken,
-                    label = { Text("API token") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Engine", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(1f))
+                    Text(if (state.localMode) "on-device" else "remote hub",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary)
+                    Spacer(Modifier.width(8.dp))
+                    Switch(checked = state.localMode,
+                        onCheckedChange = { vm.setLocalMode(it) })
+                }
+                if (state.localMode) {
+                    Text("Runs entirely on this device — no hub, no Termux. " +
+                        "The AI Familiar needs the remote hub for now.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp))
+                } else {
+                    OutlinedTextField(
+                        value = state.hubUrl, onValueChange = vm::setHubUrl,
+                        label = { Text("Hub URL") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    OutlinedTextField(
+                        value = state.token, onValueChange = vm::setToken,
+                        label = { Text("API token") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
                 Row(Modifier.padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = vm::connect, enabled = !state.busy) {
-                        Text(if (state.connected) "Reconnect" else "Link")
+                        Text(when {
+                            state.connected -> "Reconnect"
+                            state.localMode -> "Power on"
+                            else -> "Link"
+                        })
                     }
                     if (state.busy) CircularProgressIndicator(Modifier.size(24.dp))
                 }

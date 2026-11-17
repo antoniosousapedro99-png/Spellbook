@@ -42,7 +42,7 @@ class LocalEngine {
         return res
     }
 
-    suspend fun summonScryer(objective: String, scope: String?): DaemonReport =
+    suspend fun summonScryer(objective: String, scope: String?): DaemonRunReport =
         scryer.run(objective, scope)
 
     private fun recordEffects(spellId: String, result: Map<String, Any?>?) {

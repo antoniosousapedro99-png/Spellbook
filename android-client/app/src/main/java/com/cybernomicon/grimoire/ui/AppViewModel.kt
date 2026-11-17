@@ -4,13 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cybernomicon.grimoire.BuildConfig
 import com.cybernomicon.grimoire.data.*
+import com.cybernomicon.grimoire.engine.LocalBackend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 data class UiState(
+    val localMode: Boolean = true,            // default: run on-device
     val hubUrl: String = BuildConfig.DEFAULT_HUB_URL,
     val token: String = "",
     val connected: Boolean = false,
@@ -28,6 +34,7 @@ data class UiState(
     val telemetry: VeilTelemetryResponse? = null,
     val live: List<LiveEvent> = emptyList(),
     val liveConnected: Boolean = false,
+    val supportsChat: Boolean = true,
     val lastReport: DaemonReport? = null,
     // Familiar conversation.
     val chat: List<ChatTurn> = emptyList(),
@@ -44,55 +51,64 @@ class AppViewModel : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    private var api: HubApi? = null
+    private var backend: Backend? = null
+    private var localBackend: LocalBackend? = null   // kept so data survives relink
     private var feed: LiveFeedClient? = null
 
     fun setHubUrl(url: String) = _state.update { it.copy(hubUrl = url) }
     fun setToken(t: String) = _state.update { it.copy(token = t) }
+    fun setLocalMode(on: Boolean) =
+        _state.update { it.copy(localMode = on, connected = false) }
 
-    /** Connect to the hub and load the initial Grimoire + Astral + Chronicle. */
+    /** Connect to the chosen backend (on-device engine or remote hub). */
     fun connect() = run {
         val s = _state.value
-        api = HubClient.create(s.hubUrl, s.token)
-        startLiveFeed(s.hubUrl, s.token)
+        feed?.close(); feed = null
+        if (s.localMode) {
+            val lb = localBackend ?: LocalBackend().also { localBackend = it }
+            backend = lb
+            _state.update { it.copy(liveConnected = false, supportsChat = false) }
+        } else {
+            backend = RemoteBackend(HubClient.create(s.hubUrl, s.token))
+            startLiveFeed(s.hubUrl, s.token)
+            _state.update { it.copy(supportsChat = true) }
+        }
         refreshAll()
     }
 
-    /** Open the live activity WebSocket; events stream into state.live. */
     private fun startLiveFeed(url: String, token: String) {
-        feed?.close()
         feed = LiveFeedClient(url, token,
-            onEvent = { ev ->
-                _state.update { it.copy(live = (listOf(ev) + it.live).take(80)) }
-            },
+            onEvent = { ev -> _state.update { it.copy(live = (listOf(ev) + it.live).take(80)) } },
             onState = { up -> _state.update { it.copy(liveConnected = up) } })
         feed!!.connect()
     }
 
-    override fun onCleared() {
-        feed?.close()
-        super.onCleared()
+    /** Synthesize a live-feed entry for the on-device engine (no WebSocket). */
+    private fun pushLive(type: String, detail: String) {
+        if (backend?.supportsLiveFeed == true) return
+        val ev = LiveEvent(type, detail, System.currentTimeMillis() / 1000.0)
+        _state.update { it.copy(live = (listOf(ev) + it.live).take(80)) }
     }
 
-    fun refreshAll() = withApi { a ->
+    override fun onCleared() { feed?.close(); super.onCleared() }
+
+    fun refreshAll() = withBackend { b ->
         _state.update { it.copy(busy = true, error = null) }
         try {
-            val spells = a.spells().spells
-            val daemons = a.daemons().daemons
-            val targets = a.targets().targets
-            val devices = a.devices().devices
-            val topology = try { a.topology() } catch (_: Exception) { null }
-            val findings = a.findings().findings
-            // Planner status is best-effort: a slow/absent local model must
-            // not block the rest of the Grimoire from loading.
-            val planner = try { a.planner() } catch (_: Exception) { null }
-            val veil = try { a.veilStatus() } catch (_: Exception) { null }
-            val telemetry = try { a.veilTelemetry() } catch (_: Exception) { null }
+            val spells = b.spells()
+            val daemons = b.daemons()
+            val targets = b.targets()
+            val devices = b.devices()
+            val topology = runCatching { b.topology() }.getOrNull()
+            val findings = b.findings()
+            val planner = runCatching { b.planner() }.getOrNull()
+            val veil = runCatching { b.veilStatus() }.getOrNull()
+            val telemetry = runCatching { b.veilTelemetry() }.getOrNull()
             _state.update {
                 it.copy(connected = true, busy = false, spells = spells,
                     daemons = daemons, targets = targets, devices = devices,
                     topology = topology, findings = findings, planner = planner,
-                    veil = veil, telemetry = telemetry)
+                    veil = veil, telemetry = telemetry, supportsChat = b.supportsChat)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, connected = false,
@@ -100,132 +116,100 @@ class AppViewModel : ViewModel() {
         }
     }
 
-    fun authorizeTarget(cidr: String, label: String) = withApi { a ->
+    fun authorizeTarget(cidr: String, label: String) = withBackend { b ->
         _state.update { it.copy(busy = true, error = null) }
         try {
-            a.addTarget(AddTargetBody(cidr = cidr, label = label))
-            _state.update { it.copy(targets = a.targets().targets, busy = false) }
+            b.addTarget(cidr, label)
+            _state.update { it.copy(targets = b.targets(), busy = false) }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, error = e.message) }
         }
     }
 
-    /** Familiar: issue a natural-language objective to a daemon. */
-    fun summon(daemonKey: String, objective: String, scope: String?) = withApi { a ->
+    fun summon(daemonKey: String, objective: String, scope: String?) = withBackend { b ->
         _state.update { it.copy(busy = true, error = null, lastReport = null) }
         try {
-            val report = a.summon(daemonKey, SummonBody(objective, scope))
+            pushLive("daemon.summon", "$daemonKey · $objective")
+            val report = b.summon(daemonKey, objective, scope)
+            pushLive("daemon.report", report.summary)
             _state.update {
-                it.copy(busy = false, lastReport = report,
-                    devices = a.devices().devices,
-                    topology = runCatching { a.topology() }.getOrNull()
-                        ?: it.topology,
-                    findings = a.findings().findings)
+                it.copy(busy = false, lastReport = report, devices = b.devices(),
+                    topology = runCatching { b.topology() }.getOrNull() ?: it.topology,
+                    findings = b.findings(),
+                    telemetry = runCatching { b.veilTelemetry() }.getOrNull() ?: it.telemetry)
             }
         } catch (e: Exception) {
             _state.update { it.copy(busy = false, error = e.message) }
         }
     }
 
-    /** Familiar: send a conversational message; the agent may call tools. */
-    fun sendChat(message: String) = withApi { a ->
+    fun sendChat(message: String) = withBackend { b ->
         val text = message.trim()
-        if (text.isEmpty()) return@withApi
-        _state.update {
-            it.copy(chatBusy = true, error = null,
-                chat = it.chat + ChatTurn("user", text))
-        }
+        if (text.isEmpty()) return@withBackend
+        _state.update { it.copy(chatBusy = true, error = null,
+            chat = it.chat + ChatTurn("user", text)) }
         try {
-            val resp = a.chat(ChatBody(text, _state.value.conversationId))
+            val resp = b.chat(text, _state.value.conversationId)
             val trace = resp.trace.map { t ->
-                "⚙ ${t.tool}${if (t.summary.isNotBlank()) " — ${t.summary}" else ""}"
-            }
-            _state.update {
-                it.copy(chatBusy = false, conversationId = resp.conversationId,
-                    chat = it.chat + ChatTurn("assistant", resp.reply, trace),
-                    // The Familiar may have changed the world; refresh views.
-                    )
-            }
-            // Pull any devices/findings/topology/telemetry the Familiar produced.
-            _state.update { it.copy(devices = a.devices().devices,
-                findings = a.findings().findings,
-                topology = runCatching { a.topology() }.getOrNull()
-                    ?: it.topology,
-                telemetry = runCatching { a.veilTelemetry() }.getOrNull()
-                    ?: it.telemetry) }
+                "⚙ ${t.tool}${if (t.summary.isNotBlank()) " — ${t.summary}" else ""}" }
+            _state.update { it.copy(chatBusy = false, conversationId = resp.conversationId,
+                chat = it.chat + ChatTurn("assistant", resp.reply, trace)) }
+            _state.update { it.copy(devices = b.devices(), findings = b.findings(),
+                topology = runCatching { b.topology() }.getOrNull() ?: it.topology,
+                telemetry = runCatching { b.veilTelemetry() }.getOrNull() ?: it.telemetry) }
         } catch (e: Exception) {
-            _state.update {
-                it.copy(chatBusy = false,
-                    chat = it.chat + ChatTurn("assistant",
-                        "⚠ ${e.message ?: "request failed"}"))
-            }
+            _state.update { it.copy(chatBusy = false,
+                chat = it.chat + ChatTurn("assistant", "⚠ ${e.message ?: "request failed"}")) }
         }
     }
 
-    /** Cast a spell directly (bypassing the Familiar). */
-    fun castSpell(spellId: String,
-                  params: Map<String, kotlinx.serialization.json.JsonElement>) =
-        withApi { a ->
-            _state.update { it.copy(busy = true, error = null, lastCast = null) }
-            try {
-                val r = a.cast(spellId, CastBody(params))
-                val msg = "⚡ $spellId → ${r.status}" +
-                    summarizeCast(spellId, r.result) +
-                    (r.error?.let { e -> ": $e" } ?: "")
-                _state.update {
-                    it.copy(busy = false, lastCast = msg,
-                        devices = a.devices().devices,
-                        findings = a.findings().findings,
-                        topology = runCatching { a.topology() }.getOrNull()
-                            ?: it.topology,
-                        telemetry = runCatching { a.veilTelemetry() }.getOrNull()
-                            ?: it.telemetry)
-                }
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = e.message) }
+    fun castSpell(spellId: String, params: Map<String, JsonElement>) = withBackend { b ->
+        _state.update { it.copy(busy = true, error = null, lastCast = null) }
+        try {
+            pushLive("spell.start", spellId)
+            val r = b.cast(spellId, params)
+            val msg = "⚡ $spellId → ${r.status}" + summarizeCast(spellId, r.result) +
+                (r.error?.let { e -> ": $e" } ?: "")
+            pushLive("spell.${r.status}", msg)
+            _state.update {
+                it.copy(busy = false, lastCast = msg, devices = b.devices(),
+                    findings = b.findings(),
+                    topology = runCatching { b.topology() }.getOrNull() ?: it.topology,
+                    telemetry = runCatching { b.veilTelemetry() }.getOrNull() ?: it.telemetry)
             }
+        } catch (e: Exception) {
+            _state.update { it.copy(busy = false, error = e.message) }
         }
+    }
 
-    /** Turn a cast result into a human summary (e.g. how many hosts scry found). */
-    private fun summarizeCast(
-        spellId: String,
-        result: kotlinx.serialization.json.JsonElement?,
-    ): String {
-        val obj = result as? kotlinx.serialization.json.JsonObject ?: return ""
-        fun arrSize(k: String) =
-            (obj[k] as? kotlinx.serialization.json.JsonArray)?.size ?: 0
-        fun intOf(k: String) =
-            (obj[k] as? kotlinx.serialization.json.JsonPrimitive)
-                ?.content?.toIntOrNull() ?: 0
+    private fun summarizeCast(spellId: String, result: JsonElement?): String {
+        val obj = result as? JsonObject ?: return ""
+        fun arrSize(k: String) = (obj[k] as? JsonArray)?.size ?: 0
+        fun intOf(k: String) = (obj[k] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
         return when (spellId) {
-            "scry" -> " · scanned ${intOf("hosts_scanned")}, " +
-                "found ${arrSize("devices")} device(s)"
+            "scry" -> " · scanned ${intOf("hosts_scanned")}, found ${arrSize("devices")} device(s)"
             "identify" -> " · ${arrSize("services")} service(s)"
             else -> ""
         }
     }
 
     // --- VEIL controls ----------------------------------------------------
-    fun setIntensity(level: String) = withApi { a ->
-        try {
-            a.veilIntensity(IntensityBody(level))
-            _state.update { it.copy(veil = a.veilStatus()) }
-        } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+    fun setIntensity(level: String) = withBackend { b ->
+        try { b.setIntensity(level); _state.update { it.copy(veil = b.veilStatus()) } }
+        catch (e: Exception) { _state.update { it.copy(error = e.message) } }
     }
-
-    fun emergencyStop() = withApi { a ->
-        try { a.veilHalt(); _state.update { it.copy(veil = a.veilStatus()) } }
+    fun emergencyStop() = withBackend { b ->
+        try { b.halt(); pushLive("veil.halt", "emergency termination")
+            _state.update { it.copy(veil = b.veilStatus()) } }
+        catch (e: Exception) { _state.update { it.copy(error = e.message) } }
+    }
+    fun resumeVeil() = withBackend { b ->
+        try { b.resume(); _state.update { it.copy(veil = b.veilStatus()) } }
         catch (e: Exception) { _state.update { it.copy(error = e.message) } }
     }
 
-    fun resumeVeil() = withApi { a ->
-        try { a.veilResume(); _state.update { it.copy(veil = a.veilStatus()) } }
-        catch (e: Exception) { _state.update { it.copy(error = e.message) } }
-    }
-
-    private fun withApi(block: suspend (HubApi) -> Unit) {
-        val a = api ?: HubClient.create(_state.value.hubUrl, _state.value.token)
-            .also { api = it }
-        viewModelScope.launch { block(a) }
+    private fun withBackend(block: suspend (Backend) -> Unit) {
+        val b = backend ?: return
+        viewModelScope.launch { block(b) }
     }
 }

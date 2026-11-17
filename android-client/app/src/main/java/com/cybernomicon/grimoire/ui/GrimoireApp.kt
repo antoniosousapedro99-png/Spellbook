@@ -37,10 +37,15 @@ fun GrimoireApp(vm: AppViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("☽ Cybernomicon") },
+                title = { Text("▚ CYBERDECK") },
                 actions = {
-                    val dot = if (state.connected) "⬢ linked" else "⬡ offline"
-                    Text(dot, modifier = Modifier.padding(end = 16.dp))
+                    val dot = when {
+                        !state.connected -> "⬡ OFFLINE"
+                        state.localMode -> "⬢ ON-DEVICE"
+                        else -> "⬢ LINKED"
+                    }
+                    Text(dot, color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(end = 16.dp))
                 }
             )
         },

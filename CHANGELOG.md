@@ -4,6 +4,18 @@ All notable changes to Project Cybernomicon are recorded here.
 
 ## [Unreleased] — Phase III (local agent intelligence)
 
+### Changed — Cyberdeck rebrand + native engine wired in (Phase 2)
+- The Android app is renamed **Cyberdeck** (launcher label + title bar) with a
+  cyberpunk theme pass: near-black voids, neon violet/cyan/magenta, and a
+  monospaced "deck" typography for headers and labels.
+- **Native engine wired into the UI.** A `Backend` interface abstracts the data
+  source; `RemoteBackend` wraps the Python hub, `LocalBackend` runs the on-device
+  Kotlin engine. An **Engine** toggle in Grimoire switches between **on-device**
+  (default — scanning with no hub/Termux) and **remote hub**. Scanning, daemons,
+  VEIL, telemetry and the Astral Plane all work locally; the AI Familiar still
+  needs the remote hub until Phase 3. On-device actions synthesize live-feed
+  events so the Chronicle stays live without a WebSocket.
+
 ### Added — native engine (Phase 1 of the all-in-one app)
 - A pure-Kotlin on-device engine under `android-client/.../engine/`, porting the
   core from Python so scanning can run entirely inside the app (no Termux, no

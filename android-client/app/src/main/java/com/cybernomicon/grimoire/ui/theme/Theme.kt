@@ -6,43 +6,63 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
-// Cybernomicon palette: dark-fantasy occult + cyberpunk.
-// Deep void backgrounds, violet/purple primaries, subtle cyan arcane accents.
-val Void = Color(0xFF0B0614)
-val VoidSurface = Color(0xFF140B24)
-val VoidSurfaceHi = Color(0xFF1E1236)
-val Violet = Color(0xFF9A6BFF)
-val VioletDeep = Color(0xFF6D3BD1)
-val Arcane = Color(0xFF34E7E4)      // cyan accent
-val Ember = Color(0xFFFF5C8A)       // warning / high severity
-val Ash = Color(0xFFB9A7E0)
-val Bone = Color(0xFFE9E2F7)
+// Cyberdeck palette: near-black voids, neon violet / cyan / magenta.
+val Void = Color(0xFF05030A)
+val VoidSurface = Color(0xFF0C0820)
+val VoidSurfaceHi = Color(0xFF17102E)
+val Violet = Color(0xFFB06BFF)
+val VioletDeep = Color(0xFF7A33E0)
+val Arcane = Color(0xFF2BF5E0)      // neon cyan
+val Magenta = Color(0xFFFF2D7E)     // hot magenta (warnings / high severity)
+val Ash = Color(0xFFB6A8E6)
+val Bone = Color(0xFFEDE7FF)
 
-private val CybernomiconColors = darkColorScheme(
+private val CyberColors = darkColorScheme(
     primary = Violet,
-    onPrimary = Bone,
+    onPrimary = Void,
     primaryContainer = VioletDeep,
+    onPrimaryContainer = Bone,
     secondary = Arcane,
     onSecondary = Void,
-    tertiary = Ember,
+    tertiary = Magenta,
+    onTertiary = Void,
     background = Void,
     onBackground = Bone,
     surface = VoidSurface,
     onSurface = Bone,
     surfaceVariant = VoidSurfaceHi,
     onSurfaceVariant = Ash,
-    error = Ember,
+    outline = VioletDeep,
+    error = Magenta,
+    onError = Void,
+    errorContainer = Color(0xFF3A0A20),
+    onErrorContainer = Magenta,
 )
+
+// A "deck" typography: monospaced, tracked-out headers for a terminal feel.
+private val mono = FontFamily.Monospace
+private val CyberType = Typography().run {
+    copy(
+        headlineSmall = headlineSmall.copy(fontFamily = mono,
+            fontWeight = FontWeight.Bold, letterSpacing = 2.sp),
+        titleLarge = titleLarge.copy(fontFamily = mono,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp),
+        titleMedium = titleMedium.copy(fontFamily = mono,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+        labelLarge = labelLarge.copy(fontFamily = mono, letterSpacing = 1.sp),
+        labelMedium = labelMedium.copy(fontFamily = mono, letterSpacing = 0.8.sp),
+        labelSmall = labelSmall.copy(fontFamily = mono, letterSpacing = 0.5.sp),
+        bodyMedium = TextStyle(fontSize = 14.sp, color = Bone),
+    )
+}
 
 @Composable
 fun CybernomiconTheme(content: @Composable () -> Unit) {
-    // The grimoire is always dark; isSystemInDarkTheme is read only so a
-    // future light ritual mode is a one-line change.
     @Suppress("UNUSED_VARIABLE") val dark = isSystemInDarkTheme()
-    MaterialTheme(
-        colorScheme = CybernomiconColors,
-        typography = Typography(),
-        content = content,
-    )
+    MaterialTheme(colorScheme = CyberColors, typography = CyberType, content = content)
 }
